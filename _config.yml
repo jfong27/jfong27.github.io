@@ -1,3 +1,11 @@
 
+title: Jason Fong
+email: jason@jnfong.com
+description: Computer Science and Data Science Student at Cal Poly San Luis Obispo
+baseurl: ""
+url: jnfong.com
+
+permalink: pretty
+
 
 theme: jekyll-theme-midnight

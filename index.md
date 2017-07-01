@@ -1,3 +1,6 @@
+##Computer Science and Data Science student at California Polytechnic State University, San Luis Obispo
+
+
 ## Welcome to GitHub Pages
 
 You can use the [editor on GitHub](https://github.com/jfong27/jfong27.github.io/edit/master/index.md) to maintain and preview the content for your website in Markdown files.

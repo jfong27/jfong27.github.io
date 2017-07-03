@@ -1,7 +1,7 @@
 ### Welcome
 
 Hi! I'm a third year computer science student minoring in data science. My interests include machine learning, systems programming, fishing, planted aquariums, and following NBA basketball.
-[Link](nba.com)
+[Link](testing)
 
 Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
 

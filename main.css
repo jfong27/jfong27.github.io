@@ -12,6 +12,7 @@ body {
   background-position: center top;
   background-size: cover;
   margin: 0;
+  animation: fadein .5s both;
 }
 
 .page-title {

@@ -18,6 +18,8 @@ body {
 .page-title {
   text-align: center;
   font-weight: 100;
+  animation: fadein 1.5s both;
+  animation-delay: 1.15s;
 }
 
 .page-description {

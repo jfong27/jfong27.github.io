@@ -166,6 +166,18 @@ section .row img {
   margin: 0 0 30px;
 }
 
+.button p {
+  margin-right: 30px;
+  padding: 8px 18px;
+  border: 1px solid #204156;
+
+}
+
+.button p:active {
+  position: relative;
+  bottom: 2px;
+}
+
 .page-description {
   border-top: 1px solid #000;
   border-bottom: 1px solid #000;

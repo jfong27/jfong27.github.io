@@ -90,6 +90,8 @@ body {
 
 header {
   padding: 20px 0;
+  animation: fadein .5s both;
+  animation-delay: .15s
 }
 
 header .row,

@@ -113,6 +113,8 @@ header nav {
 header p {
   padding: 0 20px;
   margin: 0;
+  animation: fadein 1.5s both;
+  animation-delay: 1.15s;
 }
 
 .jumbotron {

@@ -166,14 +166,14 @@ section .row img {
   margin: 0 0 30px;
 }
 
-.button p {
+.b-btn a {
   margin-right: 30px;
   padding: 8px 18px;
   border: 1px solid #204156;
 
 }
 
-.button p:active {
+.b-btn a:active {
   position: relative;
   bottom: 2px;
 }

@@ -113,8 +113,7 @@ header nav {
 header p {
   padding: 0 20px;
   margin: 0;
-  animation: fadein 1.5s both;
-  animation-delay: 1.15s;
+  
 }
 
 .jumbotron {
@@ -165,6 +164,15 @@ section .row img {
   background-color: #E8DFE0;
   color: #ffffff;
   margin: 0 0 30px;
+}
+
+.page-description {
+  border-top: 1px solid #000;
+  border-bottom: 1px solid #000;
+  text-align: center;
+  padding: 30px;
+  animation: fadein 1.5s both;
+  animation-delay: 1.15s;
 }
 
 footer {

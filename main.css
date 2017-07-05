@@ -86,12 +86,14 @@ nav a {
 body {
   font-family: 'Roboto', sans-serif;
   font-weight: 300;
+  background-image: url('https://s3-us-west-1.amazonaws.com/jasonfong/p/Nbi7bYI.jpg');
+  background-size: cover;
 }
 
 header {
   padding: 20px 0;
   animation: fadein .5s both;
-  animation-delay: .15s
+  animation-delay: .15s;
 }
 
 header .row,

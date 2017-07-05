@@ -169,14 +169,14 @@ section .row img {
 }
 
 .a-btn {
-
+  animation: fadein 1.5s both;
+  animation-delay: 1.15s;
+  display: flex;
 }
 
 .a-btn a {
   margin-right: 30px;
   padding: 8px 18px;
-  border: 1px solid #204156;
-
 }
 
 .a-btn a:active {

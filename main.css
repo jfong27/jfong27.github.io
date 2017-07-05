@@ -168,18 +168,18 @@ section .row img {
   margin: 0 0 30px;
 }
 
-.contact-btn {
+.a-btn {
 
 }
 
-.contact-btn a {
+.a-btn a {
   margin-right: 30px;
   padding: 8px 18px;
   border: 1px solid #204156;
 
 }
 
-.contact-btn a:active {
+.a-btn a:active {
   position: relative;
   bottom: 5px;
 }

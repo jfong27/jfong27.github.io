@@ -84,7 +84,7 @@ nav a {
 }
 */
 body {
-  font-family: 'Roboto', sans-serif;
+  font-family: 'Raleway', sans-serif;
   font-weight: 300;
   background-image: url('https://s3-us-west-1.amazonaws.com/jasonfong/p/Nbi7bYI.jpg');
   background-size: cover;
@@ -103,7 +103,7 @@ footer .row {
 }
 
 header h1 {
-  font-weight: 700;
+  font-weight: 350;
   margin: 0;
 }
 

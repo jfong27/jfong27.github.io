@@ -169,19 +169,19 @@ section .row img {
 }
 
 .a-btn {
-  animation: fadein 1.5s both;
-  animation-delay: 1.15s;
   display: flex;
 }
 
 .a-btn a {
-  margin-right: 30px;
-  padding: 8px 18px;
+  animation: fadein 1.5s both;
+  animation-delay: 1.15s;
+  margin-right: 20px;
+  padding: 2px 10px;
 }
 
 .a-btn a:active {
   position: relative;
-  bottom: 5px;
+  bottom: 2px;
 }
 
 .page-description {

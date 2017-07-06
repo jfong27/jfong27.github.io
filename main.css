@@ -203,6 +203,10 @@ section .row img {
   bottom: 2px;
 }
 
+.sm-btn:hover {
+  opacity: 1.0;
+}
+
 
 .page-description {
   border-top: 1px solid #000;

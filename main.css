@@ -87,6 +87,7 @@ body {
   font-family: 'Raleway', sans-serif;
   font-weight: 300;
   background-size: cover;
+  background-image: url("https://s3-us-west-1.amazonaws.com/jasonfong/p/goats.JPG");
 }
 
 header {

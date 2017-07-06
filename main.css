@@ -142,13 +142,13 @@ section .row img {
   width: 100%;
 }
 
-.email{
+.content{
   text-align: center;
   font-size: 10px;
   font-weight: 50;
 }
 
-.contact{
+.section{
   text-align: center;
   font-size: 20px;
   font-weight: 200;

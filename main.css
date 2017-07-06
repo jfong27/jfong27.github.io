@@ -198,8 +198,8 @@ section .row img {
 }
 
 hr.underline {
-    width: 80px;
-    color: #363942;
+    width: 55px;
+    color: #3b7ab7;
     border-top: 2px solid #ea9312;
 }
 

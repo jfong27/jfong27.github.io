@@ -192,7 +192,7 @@ section .row img {
 
 .sm-btn {
   display: flex;
-  opacity: 1;
+  opacity: 0.3;
 }
 
 .sm-btn img {
@@ -204,10 +204,8 @@ section .row img {
   position: relative;
   bottom: 2px;
 }
-.sm-btn:hover{
-  opacity: 0.2
-  
-}
+
+
 .page-description {
   border-top: 1px solid #000;
   border-bottom: 1px solid #000;

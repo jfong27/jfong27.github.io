@@ -200,7 +200,7 @@ section .row img {
 hr.underline {
     width: 55px;
     color: #337ab7;
-    border-top: 2px solid #ea9312;
+    border-top: 2px solid #337ab7;
 }
 
 img.center {

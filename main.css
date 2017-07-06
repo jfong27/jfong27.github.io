@@ -86,14 +86,11 @@ nav a {
 body {
   font-family: 'Raleway', sans-serif;
   font-weight: 300;
-  background-image: url('https://s3-us-west-1.amazonaws.com/jasonfong/p/tree_background.jpg');
   background-size: cover;
 }
 
 header {
   padding: 20px 0;
-  animation: fadein .5s both;
-  animation-delay: .15s;
 }
 
 header .row,
@@ -146,7 +143,7 @@ section .row img {
 }
 
 .contact{
-  align-items: center;
+  text-align: center;
   font-size: 60px;
   font-weight: 500;
 }
@@ -178,8 +175,6 @@ section .row img {
 }
 
 .a-btn a {
-  animation: fadein 1.5s both;
-  animation-delay: 1.15s;
   margin-right: 20px;
   padding: 2px 10px;
 }
@@ -194,8 +189,6 @@ section .row img {
   border-bottom: 1px solid #000;
   text-align: center;
   padding: 30px;
-  animation: fadein 1.5s both;
-  animation-delay: 1.15s;
 }
 
 footer {

@@ -88,9 +88,8 @@ body {
   font-weight: 300;
   
   background-image: url("https://s3-us-west-1.amazonaws.com/jasonfong/p/goats.JPG");
-  background-size: auto 100%;
-  background-repeat: no-repeat;
-  background-position: left top;
+  background-size: 100% 100%;
+
 }
 
 header {

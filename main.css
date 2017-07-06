@@ -203,7 +203,7 @@ section .row img {
 
 .sm-btn img:active {
   position: relative;
-  bottom: 2px;
+  top: 2px;
 }
 
 .sm-btn:hover {
@@ -245,9 +245,9 @@ footer ul {
 }
 
 footer li img {
-  width: 80px;
+  width: 90px;
   height: 25px;
-  text-align: center;
+  text-align: right;
 }
 
 

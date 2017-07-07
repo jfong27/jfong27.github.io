@@ -238,17 +238,16 @@ footer {
 footer .col-sm-8 {
   display: flex;
   justify-content: flex-end;
-  text-align: center;
 }
 
 footer ul {
   list-style: none;
+  vertical-align: middle
 }
 
 footer li img {
-  width: 90px;
+  width: 100px;
   height: 25px;
-  align: right;
 }
 
 

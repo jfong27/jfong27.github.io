@@ -86,6 +86,7 @@ nav a {
 body {
   font-family: 'Raleway', sans-serif;
   font-weight: 300;
+  background-image: url("https://s3-us-west-1.amazonaws.com/jasonfong/p/goats.JPG");
 
 }
 
@@ -193,7 +194,7 @@ section .row img {
 .sm-btn {
   width: 25px;
   height: 10px;
-  opacity: 0.3;
+  opacity: 0.5;
 }
 
 .sm-btn img {
@@ -247,7 +248,7 @@ footer ul {
 footer li img {
   width: 90px;
   height: 25px;
-  text-align: right;
+  align: right;
 }
 
 

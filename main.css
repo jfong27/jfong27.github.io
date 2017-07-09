@@ -173,13 +173,10 @@ section .row img {
 }
 
 .sm-btn {
-  width: 25px;
-  height: 10px;
   opacity: 0.5;
 }
 
 .sm-btn img {
-  padding: 2px 10px;
   
 }
 

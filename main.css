@@ -111,6 +111,10 @@ section .row img {
   padding: 30px;
 }
 
+.progress {
+ width: 25%; 
+}
+
 
 hr.underline {
     width: 55px;

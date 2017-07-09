@@ -262,4 +262,13 @@ footer li img {
   height: 25px;
 }
 
+img {
+    position: relative;
+    float: left;
+    width:  100px;
+    height: 100px;
+    background-position: 50% 50%;
+    background-repeat:   no-repeat;
+    background-size:     cover;
+}
 

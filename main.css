@@ -7,6 +7,10 @@ body {
   -webkit-background-size: cover;
   background-size: cover;
   background-attachment: fixed;
+  
+  -webkit-animation: slowblur 1s ease-in 1s forwards;
+  -moz-animation: slowblur 1s ease-in 1s forwards;
+  animation: slowblur 1s ease-in 1s forwards;
 }
 
 header {

@@ -127,7 +127,7 @@ section .row img {
 }
 
 .fade-in {
-    opacity:0; 
+    opacity:0.2; 
     -webkit-animation:fadeIn ease-in 1; 
     -moz-animation:fadeIn ease-in 1;
     animation:fadeIn ease-in 1;

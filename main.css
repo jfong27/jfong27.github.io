@@ -2,6 +2,7 @@ body {
   font-family: 'Raleway', sans-serif;
   font-weight: 300;
   
+  background-image: url("https://s3-us-west-1.amazonaws.com/jasonfong/p/goats.JPG");
   display: block;
   -webkit-background-size: cover;
   background-size: cover;

@@ -126,6 +126,21 @@ section .row img {
  width: 50%; 
 }
 
+.fadein {
+    opacity:0; 
+    -webkit-animation:fadeIn ease-in 1; 
+    -moz-animation:fadeIn ease-in 1;
+    animation:fadeIn ease-in 1;
+
+    -webkit-animation-fill-mode:forwards; 
+    -moz-animation-fill-mode:forwards;
+    animation-fill-mode:forwards;
+
+    -webkit-animation-duration: 0.7s;
+    -moz-animation-duration: 0.7s;
+    animation-duration: 0.7s;
+}
+
 
 hr.underline {
     width: 55px;

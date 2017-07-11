@@ -1,16 +1,6 @@
 body {
   font-family: 'Poppins', sans-serif;
   font-weight: 300;
-  
-  background-image: url("https://s3-us-west-1.amazonaws.com/jasonfong/p/goats.JPG");
-  display: block;
-  -webkit-background-size: cover;
-  background-size: cover;
-  background-attachment: fixed;
-  
-  -webkit-animation: slowblur 1s ease-in 1s forwards;
-  -moz-animation: slowblur 1s ease-in 1s forwards;
-  animation: slowblur 1s ease-in 1s forwards;
 }
 
 header {

@@ -1,5 +1,5 @@
 body {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-weight: 300;
   
   background-image: url("https://s3-us-west-1.amazonaws.com/jasonfong/p/goats.JPG");
@@ -25,7 +25,7 @@ footer .row {
 }
 
 header h1 {
-  font-weight: 350;
+  font-weight: 700;
   font-size: 65px;
   margin: 0;
 }
@@ -50,7 +50,7 @@ section .row img {
 .content{
   text-align: center;
   font-size: 10px;
-  font-weight: 50;
+  font-weight: 300;
 }
 
 .section{
@@ -58,7 +58,7 @@ section .row img {
   margin-bottom: 5px;
   text-align: center;
   font-size: 30px;
-  font-weight: 200;
+  font-weight: 300;
 }
 .col-md-6 {
   margin: 0 0 30px;
@@ -179,3 +179,14 @@ svg {
     display: block;
 }
 
+
+#column-content {
+  display: inline-block;
+}
+img {
+  vertical-align: middle;
+}
+span {
+  display: inline-block;
+  vertical-align: middle;
+}

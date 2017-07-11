@@ -188,6 +188,10 @@ span {
     z-index: 100
 }
 
+#wrapper.hide {
+    display: none
+}
+
 #particles-js canvas {
     display: block;
     vertical-align: bottom;

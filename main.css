@@ -191,28 +191,12 @@ span {
   vertical-align: middle;
 }
 
-/* 
-
-body {
-  margin: 0;
-  font:normal 75% Arial, Helvetica, sans-serif;
+#wrapper {
+    padding: 100px 0 60px 100px;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 100
 }
-
-canvas {
-  display: block;
-  vertical-align: bottom;
-}
-
-#particles-js {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  background-color: #232741;
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-position: 50% 50%;
-}
-*/
 
 #particles-js canvas {
     display: block;

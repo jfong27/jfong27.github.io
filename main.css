@@ -214,3 +214,5 @@ span {
     top: 0;
     left: 0
 }
+
+.invert {-webkit-filter: invert(100%); filter: invert(100%);}

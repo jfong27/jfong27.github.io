@@ -185,6 +185,11 @@ footer div img {
   height: 50px;
 }
 
+.display-container img {
+  width: 640px;
+  height: 366px;
+}
+
 * {
     box-sizing: border-box;
 }

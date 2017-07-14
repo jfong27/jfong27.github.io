@@ -284,6 +284,7 @@ span {
 .w3-content{max-width:980px;margin:auto}
 .w3-display-middle{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);-ms-transform:translate(-50%,-50%)}	
 .w3-left{float:left!important}.w3-right{float:right!important}
+.w3-padding-16{padding-top:16px!important;padding-bottom:16px!important}
 
 .invert {-webkit-filter: invert(100%); filter: invert(100%);}
 

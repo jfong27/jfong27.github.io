@@ -40,9 +40,15 @@ section .row img {
 }
 
 .content{
+  max-width: 980px;
+  margin: auto;
   text-align: center;
   font-size: 10px;
   font-weight: 300;
+}
+
+.display-container {
+  position: relative;
 }
 
 .section{

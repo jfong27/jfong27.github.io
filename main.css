@@ -276,5 +276,9 @@ span {
 .w3-large{
 	font-size:45px!important;
 }
+.w3-border{border:1px solid #ccc!important}
+.w3-container:after,.w3-container:before{content:"";display:table;clear:both}
+.w3-section{margin-top:16px!important;margin-bottom:16px!important}
+.w3-display-bottommiddle{position:absolute;left:50%;bottom:0;transform:translate(-50%,0%);-ms-transform:translate(-50%,0%)}
 
 .invert {-webkit-filter: invert(100%); filter: invert(100%);}

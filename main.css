@@ -292,7 +292,7 @@ span {
 .display-container{
    position:relative;
    margin-top: 10px;
-   margin-bottom: 10px;
+   margin-bottom: 190px;
 }
 .w3-tooltip .w3-text{display:none}
 .w3-tooltip:hover .w3-text{display:inline-block}

@@ -50,7 +50,7 @@ section .row img {
 
 .section{
   margin-top: 40px; 
-  margin-bottom: 5px;
+  margin-bottom: 1px;
   text-align: center;
   font-size: 45px;
   font-weight: 400;
@@ -135,7 +135,7 @@ section .row img {
   border-bottom: 1px solid #000;
   text-align: center;
   padding: 30px;
-  font-size: 40px;
+  font-size: 28px;
 }
 
 .progress {
@@ -291,8 +291,8 @@ span {
 .w3-container,.w3-panel{padding:0.01em 16px}
 .display-container{
    position:relative;
-   margin-top: 10px;
-   margin-bottom: 190px;
+   margin-top: 15px;
+   margin-bottom: 95px;
 }
 .w3-tooltip .w3-text{display:none}
 .w3-tooltip:hover .w3-text{display:inline-block}

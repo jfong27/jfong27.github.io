@@ -276,7 +276,7 @@ span {
 .w3-container:after,.w3-container:before{content:"";display:table;clear:both}
 .w3-section{margin-top:16px!important;margin-bottom:16px!important}
 .w3-display-bottommiddle{position:absolute;left:50%;bottom:0;transform:translate(-50%,0%);-ms-transform:translate(-50%,0%)}
-display-container, .w3-display-container:hover {display: block;}
+.display-container, .w3-display-container:hover {display: block;}
 .w3-content{max-width:980px;margin:auto}
 .w3-display-middle {
    position:absolute;
@@ -288,7 +288,7 @@ display-container, .w3-display-container:hover {display: block;}
 .w3-left{float:left!important}.w3-right{float:right!important}
 .w3-padding-16{padding-top:16px!important;padding-bottom:16px!important}
 .w3-container,.w3-panel{padding:0.01em 16px}
-display-container{
+.display-container{
    position:relative;
    margin-top: 10px;
    margin-bottom: 10px;

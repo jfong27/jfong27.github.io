@@ -111,6 +111,8 @@ section .row img {
 
 .sm-btn {
   opacity: 0.5;
+  margin-top: 10px;
+  margin-bottom: 10px;
 }
 
 .sm-btn img {

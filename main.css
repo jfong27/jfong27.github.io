@@ -169,6 +169,10 @@ section .row img {
     width: 110px;
     height: 60px;
 }
+#unix {
+    width: 90px;
+    height:40px;   
+}
 
 hr.underline {
     width: 55px;

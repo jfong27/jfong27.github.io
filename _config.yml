@@ -6,6 +6,3 @@ baseurl: ""
 url: jnfong.com
 
 permalink: pretty
-
-
-theme: jekyll-theme-midnight

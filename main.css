@@ -170,8 +170,13 @@ section .row img {
     height: 60px;
 }
 #unix {
-    width: 90px;
-    height:40px;   
+    width: 100px;
+    height:50px;   
+    margin-left:0px;
+}
+#ds{
+  width: 120px;
+  height:90px;
 }
 
 hr.underline {

@@ -1,0 +1,3680 @@
+
+<!--[if IE]><script type="text/javascript" src="excanvas-r73.js"></script><![endif]-->
+<script type="text/javascript">  
+// Title: Regression applet with scrambling of y values.
+// Authors: Beth and Frank Chance.
+// Copyright (c) 2011-2015 Beth and Frank Chance.
+// Duplication without the written permission of Beth and Frank Chance prohibited by federal law.
+
+function getInternetExplorerVersion()
+// Returns the version of Internet Explorer or a -1
+// (indicating the use of another browser).
+{
+  var rv = -1; // Return value assumes failure.
+  if (navigator.appName == 'Microsoft Internet Explorer')
+  {
+    var ua = navigator.userAgent;
+    var re  = new RegExp("MSIE ([0-9]{1,}[\.0-9]{0,})");
+    if (re.exec(ua) != null)
+      rv = parseFloat( RegExp.$1 );
+  }
+  return rv;
+};
+
+// Export functions that are called from html -- this is needed for advanced closure compiler... but maybe not for simple?
+window['pageSetup'] = pageSetup;
+window['swapInputOrder'] = swapInputOrder;
+window['useData'] = useData;
+window['revertData'] = revertData;
+window['clearData'] = clearData;
+window['addObservation'] = addObservation;
+window['deleteObservation'] = deleteObservation;
+window['redraw'] = redraw;
+window['changeShowScrambleOptions'] = changeShowScrambleOptions;
+window['scrambleData'] = scrambleData;
+window['about'] = about;
+
+// global variables
+var g_about = "Version 49a.\n\nCopyright (c) 2011-2015 Beth and Frank Chance. Duplication without the written permission of Beth and Frank Chance prohibited by federal law.";
+var g_hideShuffle = false;			// Shuffle inputs can be hidden with URL parameter HideShuffle=1
+var g_popMean = 10;
+
+// Initial sample data observations.
+var g_initDataText = "footlength height\n32.0\t74\n24.0\t66\n29.0\t77\n30.0\t67\n24.0\t56\n26.0\t65\n27.0\t64\n29.5\t70\n26.0\t62\n26.5\t67\n28.0\t66\n28.0\t64\n26.0\t69\n35.0\t73\n30.0\t74\n31.0\t70\n29.0\t65\n34.0\t72\n33.0\t71\n22.0\t63\n";
+//var g_initDataText = "waveheight boardlength\n2.69\t8.17\n2.69\t7.17\n2.69\t8.5\n2.69\t9.25\n2.69\t8.75\n2.69\t8.33\n2.69\t8.5\n2.69\t9\n2.1\t8.67\n2.1\t8.83\n4.13\t7.5\n4.13\t7.17\n4.13\t7.5\n4.13\t6.17\n4.17\t6.5\n4.17\t6.67\n4.17\t7\n5.58\t6\n4.27\t6.67\n4.27\t8\n3.84\t7.5\n3.84\t8\n3.84\t7.17\n2.69\t8\n2.69\t8.5\n2.69\t9.33\n2.69\t8.83\n2.69\t8.25\n3.54\t8.5\n3.54\t6.83\n3.54\t7.75\n3.54\t6.83\n3.54\t8\n3.54\t7.17\n3.54\t7.33\n4.69\t6.83\n4.69\t6.17\n4.69\t6\n4.69\t5.83\n4.69\t6.5\n4.72\t7.17\n4.72\t7.25\n4.72\t7\n4.72\t6.17\n4.72\t6.5\n3.18\t8.17\n3.18\t7.67\n3.18\t8\n3.18\t8.25\n3.18\t7.5\n3.18\t8.5\n3.18\t8\n3.18\t8.17\n2.23\t9.25\n2.23\t8\n2.23\t9.17\n2.23\t7.67\n2.23\t7.5\n2.23\t8\n2.23\t7.33\n2.23\t8.83\n4.89\t7\n5.22\t6.83\n5.22\t6.67\n6.04\t6.17\n5.74\t6.5\n5.74\t6\n5.74\t6.25\n3.74\t7.17\n3.74\t7.75\n3.74\t7.67\n3.74\t7.83\n3.74\t8.17\n2.53\t8.17\n2.53\t9\n2.53\t8.5\n2.53\t7.83\n2.53\t8.83\n2.53\t7\n2.53\t8.33\n2.53\t8.5\n2.53\t9.17\n";
+
+var g_inputIsExplanatoryResponse = true;// Default is X(explanatory), Y(response). If false, then input is Y,X.
+var g_saveInputExplanatoryResponse = true;
+var g_lastUseDataText = "";			// Last "use data" text. Used by "revert" button.
+var g_obsX = new Array();			// g_obsX holds our observed X values. 0-based array.
+var g_obsY = new Array();			// g_obsY holds our observed Y values. 0-based array.
+var g_scrambleIndex = null; 	 	// Initially, g_scrambleIndex[i] = i, e.g. no scrambling. Scrambling randomizes the indexes. 
+									// So we get the original Y value in g_obsY[i]. Or we can get the scrambled Y value by taking
+									// g_obsY[g_scrambleIndex[i]].
+var g_noScrambleIndex = null;		// g_noScrambleIndex[i] = i.
+var g_isScrambled = false;			// Has data been scrambled?
+var g_scrambleCount = 0;			// Number of completed scrambles. Reset by useData().
+var g_scrambleStats = new Array();	// Array of stats (correlation, regression slope) for each successive scramble.
+var g_scrambleStatsSelectedIndex = null;	// If user selects a point in histogram, then g_scrambleStatsSelectedIndex is index of selected shuffle.
+
+var g_numObs = 0;					// Number of observations.
+var g_countSamples = false;
+var g_samplePlot = {
+	canvasName: "samplePlot",			// ID of canvas html element
+	canvasWidth: 0, 				// Width of chart canvas (controlled by html canvas element). Set by pageSetup() so we can use it elsewhere.
+	canvasHeight: 0, 				// Height of chart canvas (controlled by html canvas element). Set by pageSetup() so we can use it elsewhere.
+	usableCanvasWidth: 0, 			// Usable width of chart canvas, after leaving space for axes. Set by pageSetup().
+	usableCanvasHeight: 0, 			// Usable width of chart canvas, after leaving space for axes. Set by pageSetup().
+	minX: 0, 						// Minimum chart X value. Set by setSamplePlotMinMax() based on observations.
+	minY: 0, 						// Minimum chart Y value. Set by setSamplePlotMinMax() based on observations.
+	maxX: 0,	 					// Maximum chart X value. Set by setSamplePlotMinMax() based on observations.
+	maxY: 0, 						// Maximum chart Y value. Set by setSamplePlotMinMax() based on observations.
+	chartToCanvasScaleX: 0, 		// Scaling factor = usableCanvasWidth / (maxX - minX).
+	chartToCanvasScaleY: 0, 		// Scaling factor = usableCanvasHeight / (maxY - minY).
+	xTitle: "X", 					// The x-axis Title.
+	yTitle: "Y",					// The y-axis Title.
+	xTitleCanvasOffset: 30,			// Canvas offset of x-axis title relative to x-axis.
+	yTitleCanvasOffset: -35,		// Canvas offset of y-axis title relative to y-axis.
+	xLabelCount: 5,					// Desired number of x-axis labels.
+	yLabelCount: 5,					// Desired number of y-axis labels.
+	xLabelDecimals: 1,				// Desired number of x-axis label decimals (e.g. 1 for 1.x, 2.x, 3.x)
+	xLabelCanvasOffset: 15,			// Canvas offset of x-axis labels relative to x-axis.
+	yLabelCanvasOffset: -10,		// Canvas offset of y-axis labels relative to y-axis.
+	topBorderWidth: 5,				// The size (pixels) between top edge of canvas and top-most point of y-axis.
+	xBorderWidth: 40,				// The size (pixels) between bottom edge of canvas and x-axis.
+	yBorderWidth: 45,				// The size (pixels) between left edge of canvas and y-axis.
+	y2BorderWidth: 20				// The size (pixels) between right edge of canvas and right-most point of x-axis.
+	};
+var g_simSamplePlot = {
+	canvasName: "simSamplePlot",		// ID of canvas html element
+	canvasWidth: 0, 				// Width of chart canvas (controlled by html canvas element). Set by pageSetup() so we can use it elsewhere.
+	canvasHeight: 0, 				// Height of chart canvas (controlled by html canvas element). Set by pageSetup() so we can use it elsewhere.
+	usableCanvasWidth: 0, 			// Usable width of chart canvas, after leaving space for axes. Set by pageSetup().
+	usableCanvasHeight: 0, 			// Usable width of chart canvas, after leaving space for axes. Set by pageSetup().
+	minX: 0, 						// Minimum chart X value. Set by setSamplePlotMinMax() based on observations.
+	minY: 0, 						// Minimum chart Y value. Set by setSamplePlotMinMax() based on observations.
+	maxX: 0,	 					// Maximum chart X value. Set by setSamplePlotMinMax() based on observations.
+	maxY: 0, 						// Maximum chart Y value. Set by setSamplePlotMinMax() based on observations.
+	chartToCanvasScaleX: 0, 		// Scaling factor = usableCanvasWidth / (maxX - minX).
+	chartToCanvasScaleY: 0, 		// Scaling factor = usableCanvasHeight / (maxY - minY).
+	xTitle: "X", 					// The x-axis Title.
+	yTitle: "Y",					// The y-axis Title.
+	xTitleCanvasOffset: 30,			// Canvas offset of x-axis title relative to x-axis.
+	yTitleCanvasOffset: -35,		// Canvas offset of y-axis title relative to y-axis.
+	xLabelCount: 4,					// Desired number of x-axis labels.
+	yLabelCount: 5,					// Desired number of y-axis labels.
+	xLabelDecimals: 1,				// Desired number of x-axis label decimals (e.g. 1 for 1.x, 2.x, 3.x)
+	xLabelCanvasOffset: 15,			// Canvas offset of x-axis labels relative to x-axis.
+	yLabelCanvasOffset: -10,		// Canvas offset of y-axis labels relative to y-axis.
+	topBorderWidth: 5,				// The size (pixels) between top edge of canvas and top-most point of y-axis.
+	xBorderWidth: 40,				// The size (pixels) between bottom edge of canvas and x-axis.
+	yBorderWidth: 45,				// The size (pixels) between left edge of canvas and y-axis.
+	y2BorderWidth: 20				// The size (pixels) between right edge of canvas and right-most point of x-axis.
+	};
+var g_histogram = {
+	canvasName: "histogram",			// ID of canvas html element
+	canvasWidth: 0, 				// Width of chart canvas (controlled by html canvas element). Set by pageSetup() so we can use it elsewhere.
+	canvasHeight: 0, 				// Height of chart canvas (controlled by html canvas element). Set by pageSetup() so we can use it elsewhere.
+	usableCanvasWidth: 0, 			// Usable width of chart canvas, after leaving space for axes. Set by pageSetup().
+	usableCanvasHeight: 0, 			// Usable width of chart canvas, after leaving space for axes. Set by pageSetup().
+	minX: 0, 						// Minimum chart X value. Set by setHistogramMinMax() based on observations.
+	minY: 0, 						// Minimum chart Y value. Set by setHistogramMinMax() based on observations.
+	maxX: 0,	 					// Maximum chart X value. Set by setHistogramMinMax() based on observations.
+	maxY: 0, 						// Maximum chart Y value. Set by setHistogramMinMax() based on observations.
+	chartToCanvasScaleX: 0, 		// Scaling factor = usableCanvasWidth / (maxX - minX).
+	chartToCanvasScaleY: 0, 		// Scaling factor = usableCanvasHeight / (maxY - minY).
+	xTitle: "", 					// The x-axis Title.
+	yTitle: t_count,				// The y-axis Title.
+	xTitleCanvasOffset: 30,			// Canvas offset of x-axis title relative to x-axis.
+	yTitleCanvasOffset: -30,		// Canvas offset of y-axis title relative to y-axis.
+	xLabelCount: 5,					// Desired number of x-axis labels.
+	yLabelCount: 5,					// Desired number of y-axis labels.
+	xLabelDecimals: 3,				// Desired number of x-axis label decimals (e.g. 1 for 1.x, 2.x, 3.x)
+	xLabelCanvasOffset: 15,			// Canvas offset of x-axis labels relative to x-axis.
+	yLabelCanvasOffset: -10,		// Canvas offset of y-axis labels relative to y-axis.
+	topBorderWidth: 5,				// The size (pixels) between top edge of canvas and top-most point of y-axis.
+	xBorderWidth: 40,				// The size (pixels) between bottom edge of canvas and x-axis.
+	yBorderWidth: 40,				// The size (pixels) between left edge of canvas and y-axis.
+	y2BorderWidth: 20,				// The size (pixels) between right edge of canvas and right-most point of x-axis.
+	binCount: 20					// The standard number of histogram bins.
+	};
+var g_movingObsIndex = null;		// The observation (index) user is in process of moving, or null.
+var g_selectedObsIndex = null;		// The observation (index) user has selected, or null. Painted in special color to identify it.
+var g_minDistanceForSelect = 50;	// Minimum (squared) distance to select a point when user tries to click on it. 
+var g_minTouchDistance = 250;		// On touch interface, code sets g_minDistanceForSelect =  g_minTouchDistance. Required due to less precision in touching.
+var g_movableLineIntercept = null;	// Y-intercept of movable line. 
+var g_movableLineSlope = null;		// Slope of movable line. 
+var g_movingMovableIndex = null;	// The movable line index (0=left, 1=middle, 2=right) user in is process of moving, or null.
+var g_isTouchInterface = (typeof document.ontouchstart !== 'undefined') ? true : false;
+									// Is applet running on touch device? If so, need to look for ontouchstart rather than onmousedown, etc.
+var g_showOriginalRegressionOutput = true;
+var g_OrigIntercept = 0;
+var g_OrigSlope = 0;
+var g_origSampleIntercept = 0;
+var g_origSampleSlope = 0;
+var g_keepOriginal = false;
+var g_setPopulation = false;
+var g_sampleSize = 1;
+var	g_sampleIndex = new Array();
+var g_populationSize = 10000;
+var g_numPopObs=0;
+var g_noaxischanges = false;
+var g_beenhere = 0;
+var g_origObsX = new Array();
+var g_origObsY = new Array();
+
+
+// Language-related globals.
+var g_language = 0;					//Default = English
+var t_title=["Two quantitative variables", "Dos variables cuantitativas"];
+var t_about=["About", "Sobre"];
+var t_revert=["Revert", "Revertir"];
+var t_usedata = ["Use Data",  "Utilizar los datos"];
+var t_createPop = ["Create Population", "Crear Pobalci&oacute;n"]
+var t_clear = ["Clear", "Reajustar"];
+var t_title = ["Analyzing Two Quantitative Variables", "An&aacute;lisis de dos variables cuantitativas"];
+var t_sampleData = ["Sample data:", "Datos de las muestras:"];
+var t_evrv = ["(Explanatory, Response)", "(Explicativa, Repuesta)"];
+var t_rvev = ["(Response, Explanatory)", "(Repuesta, Explicativa)"];
+var t_explanatory = ["Explanatory", "Expicativa"];
+var t_response = ["Response", "Repuesta"];
+var t_shuffling =["Show Shuffle Options:", "Mostrar las opciones de mezcla:"];
+var t_sampling =["Show Sampling Options:", "Mostrar las opciones de muetreo:"];
+var t_shuffled = ["Shuffled", "Sampled"];
+var t_numShuffles = ["Number of Shuffles", "N&uacute;mero de mezclas"];
+var t_sampleSize = ["Sample Size", "Tama&ntilde;o de la muestra:"];
+var t_showOrig = ["Show Original Regression Line", "Mostrar recta de regres&iacute;on original"];
+var t_regline = ["Regresssion Line", "Recta de regres&iacute;on"];
+var t_numSamples = ["Number of Samples", "N&uacute;mero de muestras"];
+var t_totalShufflesText = ["Total Shuffles = ", "N&uacute;mero total de mezclas"];
+var t_totalSamplesText = ["Total Samples = ", "Num. de mezclas = "];
+var t_table = ["Data", "Datos"];
+var t_plot = ["Plot", "Gr&aacute;fico"];
+var t_mean = ["Mean =", "Promedio ="];
+var t_SD = ["SD = ", "DE = "];
+var t_SE = ["SE", "DE"];
+var t_countButton = ["Count", "Contar"];
+var t_CountSamples = ["Count Samples", "Contar Mezclas"];
+var t_showMovableLine = ["Show Movable Line", "Mostrar recta m&oacute;vil"];
+var t_showResiduals = ["Show Residuals:", "Mostrar residuos:"];
+var t_showSquaredResiduals = ["Show Squared Residuals:", "Mostrar residuos al cuadrado:"];
+var t_addObservations = ["Add/Remove Observations:", "A&ntilde;adir/Borrar observaciones:"];
+var t_moveObservations = ["Move observations:", "Mover observaciones:"];
+var t_add = ["Add", "A&ntilde;adir"];
+var t_delete = ["Delete", "Borrar"];
+var t_showRegressionLine =["Show Regression Line:", "Mostrar recta de regresi&oacute;n:"];
+var t_correlation = ["Correlation coefficient", "Coeficiente de correlaci&oacute;n" ];
+var t_corrAbbr = ["Correlation", "Correlaci\u00F3n"];
+var t_slope = ["Slope", "Pendiente"];
+var t_tstatistic = ["<i>t</i>-statistic", "Estad&iacute;stico <i>t</i> "];
+var t_tstatisticText = ["t-statistic", "Estad\u00EDstico-t "];
+var t_intercept = ["Intercept", "Intercepto"];
+var t_rsquared = ["R-squared", "R-cuadrado"];
+var t_regS = ["Regression SE", "DE de regresi&oacute;n"];
+var t_regtable = ["Regression Table:", "Tabla de regresi&oacute;n:"];
+var t_slopeCI = ["95% Confidence interval for Slope:", "95% CI for Pendiente"];
+var t_design = ["Design Population:", "Dise&ntilde;ar la poblaci&oacute;n:"];
+var t_MostRecent = ["Most Recent", "m&aacute;s reciente"];
+var t_shuffled = ["Shuffled", "mezclado"];
+var t_shuffle = ["shuffle", "mezcla"];
+var t_sample = ["sample", "muestra"];
+var t_sampled = ["Sampled", "de la muestra"];
+var t_shuffleY = ["Shuffle Y-values", "Reordenar valores de y"];
+var t_lessThan = ["Less than &le;", "Menos de &le;"];
+var t_greaterThan = ["Greater than &ge;", "M&aacute;s de &ge;"];
+var t_beyond = ["Beyond", "M&aacute;s alla de"];
+var t_warning= ["Warning: Your input does not match your original data", "Cuidado: Su entrada no coincide con los datos originales"];
+var t_countLabel=["Count", "Frecuencia"];
+var t_count=["Count", "Contar"];
+var t_drawSamples = ["Draw Samples", "Seleccionar muestras"];
+
+var t_popInputs=["Population inputs", "Caracter&iacute;sticas de la poblaci&oacute;n:"];
+var t_popSlope=["Population slope:", "Pendiente poblacional:"];
+var t_popIntercept=["Population intercept:", "Intercepto poblacional:"];
+var t_popXMean=["Population x mean:", "Media poblacional de x:"];
+var t_popXSD=["Population x std:", "DE poblacional de x:"];
+var t_popSigma=["Population sigma:", "Sigma poblacional:"];
+
+var t_overlayt=["Overlay <i>t</i>-distribution", "Superponer distribuci&oacute;n <i>t</i>"];
+var t_theory=["theory-based p-value", "valor-p te&oacute;rico"];
+
+var g_firstPopXMean = 0;
+var g_firstPopXStd = 0;
+var g_firstPopYMean = 0;
+
+// Shortcut for much-used document.getElementById().
+function $(id) {
+  return document.getElementById(id);
+};
+
+function checkBrowser() {
+	// check if object supports getContext() method, a method of the canvas element
+	// Note: Need to refer to a canvas element that is defined in the HTML, which in this case in "chart".
+	// See https://groups.google.com/forum/?fromgroups#!topic/google-excanvas/tz6IIKQzROA for a discussion of getContext with dynamically generated canvas.
+	// Probably we should add a small canvas element to all applets that has the same name, e.g. checkBrowserCanvas... that way we don't have
+	// to touch this routine for every applet.
+	var canvasCheck=($("samplePlot").getContext) ? true : false;
+	if (!canvasCheck) {
+		// Doesn't look good.
+		alert("It appears your browser lacks drawing (canvas) support. Please switch to a recent version of Chrome, Firefox, Safari, or Internet Explorer 9 or higher.");
+	}
+};
+
+// Get url parameter value
+function gup(name)
+{
+  name = name.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
+  var regexS = "[\\?&]"+name+"=([^&#]*)";
+  var regex = new RegExp(regexS,"i");
+  var results = regex.exec( window.location.href );
+  if( results == null )
+    return "";
+  else
+    return results[1];
+}
+
+// Initialize page.
+function pageSetup() {
+	// Add trim - missing in IE.
+	if(typeof String.prototype.trim !== 'function') {
+	  String.prototype.trim = function() {
+		return this.replace(/^\s+|\s+$/g, ''); 
+	  };
+	}
+	checkBrowser();
+	// Check URL parameters
+	var lang=parseInt(gup("language"));
+	if(!isNaN(lang)) {
+		// if language specified in URL, use that.
+		g_language =lang;
+	}
+	if (gup("hideExtras") == "1") {
+			$("pageTitle").style.display="none";
+			$("about").style.display="none";
+			$("PageLastModified").style.display="none";
+		}
+	if (gup("hideExtras") == "2") {
+			$("pageTitle").style.display="none";
+			$("about").style.display="none";
+			$("PageLastModified").style.display="none";
+			$("appletTitle").style.display = "none";
+	} else {
+			$("appletTitle").innerHTML=t_title[g_language];
+			$("about").innerHTML = t_about[g_language];
+
+	}
+	$("t_usedata").innerHTML = t_usedata[g_language];
+	$("t_createPop").innerHTML=t_createPop[g_language];
+	$("t_revert").innerHTML = t_revert[g_language];
+	$("t_clear").innerHTML = t_clear[g_language];
+	$("about").innerHTML = t_about[g_language];
+	$("t_popInputs").innerHTML = t_popInputs[g_language];
+	$("t_popSlope").innerHTML = t_popSlope[g_language];
+	$("t_popIntercept").innerHTML = t_popIntercept[g_language];
+	$("t_popXMean").innerHTML = t_popXMean[g_language];
+	$("t_popXSD").innerHTML = t_popXSD[g_language];
+	$("t_popSigma").innerHTML = t_popSigma[g_language];
+	
+	$("showMovableLineLabel").innerHTML = t_showMovableLine[g_language];
+	$("showResidualsLabel").innerHTML = t_showResiduals[g_language];
+	$("showSquaredResidualsLabel").innerHTML = t_showSquaredResiduals[g_language];
+	$("addObservationLabel").innerHTML = t_addObservations[g_language];
+	$("moveObservationsLabel").innerHTML = t_moveObservations[g_language];
+	$("btnAddObservation").innerHTML = t_add[g_language];
+	$("showRegressionLineLabel").innerHTML = t_showRegressionLine[g_language];
+	$("showResidualsLabel2").innerHTML = t_showResiduals[g_language];
+	$("showSquaredResidualsLabel2").innerHTML = t_showSquaredResiduals[g_language];
+	$("showCorrelationLabel").innerHTML = t_correlation[g_language];
+	$("rsquaredLabel").innerHTML = t_rsquared[g_language];
+	$("regSLabel").innerHTML = t_regS[g_language];
+	$("regressionTableLabel").innerHTML = t_regtable[g_language];
+	$("designPopulationLabel").innerHTML = t_design[g_language];
+	$("interceptTextTable").innerHTML = t_intercept[g_language];
+	$("slopeTextTable").innerHTML = t_slope[g_language];
+	$("SETable").innerHTML = t_SE[g_language];
+	$("SlopeCILabel").innerHTML = t_slopeCI[g_language];
+
+	
+	$("t_sampleData").innerHTML = t_sampleData[g_language];
+	if (isNaN($("btnSwapInputOrder").value) || $("btnSwapInputOrder").value == "") $("btnSwapInputOrder").innerHTML = t_evrv[g_language];
+	//else 	$("btnSwapInputOrder").innerHTML = $("btnSwapInputOrder").value;
+	$("labelShowScrambleOptions").innerHTML = t_shuffling[g_language];
+
+	
+	if (gup("HideShuffle") == "1") {
+		g_hideShuffle = true;
+	}
+	else {
+		$("labelNumberOfScrambles").innerHTML= t_numShuffles[g_language];
+		$("labelSampleSize").innerHTML=t_sampleSize[g_language];
+	}
+	if (gup("Sampling") == "1") {
+		g_setPopulation = true;
+		$("setPopulation").checked = true;
+		setPopulation();
+	}
+
+	plotSetup(g_samplePlot);
+	plotSetup(g_simSamplePlot);
+	plotSetup(g_histogram);
+	$("cellRescale").style.display="none";
+	$("resamplePopulationCell").style.display="none";
+	
+	if (g_isTouchInterface) {
+		// ipad/iphone/etc. Watch for touches rather than onmousedown etc. Required for moving points and moving the movable line.
+		document.ontouchstart = onMouseDown;
+		document.ontouchend = onMouseUp;
+		// Increase tolerance for selecting points.
+		g_minDistanceForSelect = g_minTouchDistance;
+	} //else {
+		// On non-touch devices, watch for mouse-button-down and mouse-button-up. Required for moving points and moving the movable line.
+		// June 2013 Always watch for mouse-button-down and mouse-button-up, just in case device supports both touch and mouse-click (like PCs with touch screens and mouse).
+		document.onmousedown = onMouseDown;
+		document.onmouseup = onMouseUp;	
+	//}
+	// Show page-last-modified date.
+	setPageLastModified();
+	// Put in a small dataset.
+	// Note: IE9 doesn't display linebreaks if we set innerHTML rather than value.
+	$("dataText").value = g_initDataText;
+	// Use the data to draw a chart.
+	useData("original");
+	useData("notpop");
+	// Troubleshoot touch
+	// $("Notes").innerHTML = g_isTouchInterface;
+};
+
+function plotSetup(plot) {
+var canvas = $(plot.canvasName);  
+var ctx = canvas.getContext("2d");  
+
+	// Set chart width and height, based on html canvas definition.
+	plot.canvasWidth = canvas.width;
+	plot.canvasHeight = canvas.height;
+	// Set usable canvas width and height, leaving space for x border and y border.
+	plot.usableCanvasWidth = plot.canvasWidth - plot.yBorderWidth;
+	plot.usableCanvasHeight = plot.canvasHeight - plot.xBorderWidth;
+};
+
+function getMouseDownCanvasXY(plot, event) {
+var x=null;
+var y=null;
+var canvas = $(plot.canvasName);
+
+	if (g_isTouchInterface && event.touches !== undefined) {
+		// ipad/iphone/etc.
+		// Only deal with one finger touches
+		//		alert(event.touches);
+		if(event.touches.length != 1) return;
+		// Get the information for finger #1
+		var touch = event.touches[0]; 
+		x = touch.pageX;
+		y = touch.pageY;
+		//$("Notes").innerHTML = "pageX: " + touch.pageX + " pageY: " + touch.pageY
+		//	+ " clientX: " + touch.clientX + " clientY: " + touch.clientY
+		//	+ " screenX: " + touch.screenX + " screenY:" + touch.screenY;
+		// alert("x: " + x + " y: " + y);
+	}
+	if (x==null && y == null){
+		if (getInternetExplorerVersion() > 0) {
+			var theEvent = event ? event : window.event;
+			x = theEvent.clientX;
+			y = theEvent.clientY;
+			// alert("x=" + x + ", y=" + y);
+		} else {
+			// All other browsers
+			if (event.x != undefined && event.y != undefined)
+			{
+				x = event.x;
+				y = event.y;
+				//$("Notes").innerHTML = "X: " + event.x + " Y: " + event.y;
+				// alert("x: " + x + " y: " + y);
+			}
+			else // Firefox method to get the position
+			{
+			  x = event.clientX;
+			  y = event.clientY;
+			}
+		}
+	}
+	if (canvas.getBoundingClientRect) {
+		// Everything is easy if we have getBoundingClientRect!
+		var rect = canvas.getBoundingClientRect();
+		x -= rect.left;
+        y -= rect.top;
+	} else {
+		// Don't have getBoundingClientRect, have to use brute force
+		// Because our canvas is inside a table, we need to loop through parent elements and add up their offsets, then subtract that from the absolute
+		// pixel positions stored in x,y.
+		var currentElement = $(plot.canvasName);  
+		var totalOffsetX = 0;
+		var totalOffsetY = 0;
+		do{
+			totalOffsetX += currentElement.offsetLeft;
+			totalOffsetY += currentElement.offsetTop;
+		}
+		while(currentElement = currentElement.offsetParent)
+		// $("Notes2").innerHTML = "offsetX: " + totalOffsetX + " totaloffsetY: " + totalOffsetY;
+		// Convert to canvas X and Y.
+		x -= totalOffsetX;
+		y -= totalOffsetY;
+		// Deal with scrolling
+		var scrollX = document.body.scrollLeft;
+		var scrollY = document.body.scrollTop;
+		x += scrollX;
+		y += scrollY;
+	}
+//	console.log("x: " + x + ", y:" + y + " totalOffsetX:" + totalOffsetX + ", totalOffsetY:" + totalOffsetY + " scrollY:" + scrollY);
+	return {canvasX: x, canvasY: y}
+}
+
+
+function getMouseDownChartXY(plot, event) {
+	var canvasXY = getMouseDownCanvasXY(plot, event);
+	var x = canvasXY.canvasX;
+	var y = canvasXY.canvasY;
+	// See if we clicked on our canvas at all.
+	if (x < 0 || y < 0) return null;
+	if (x > $(plot.canvasName).width) return null;
+	if (y > $(plot.canvasName).height) return null;
+	// $("Notes3").innerHTML = "after offset, x: " + x + " y: " + y + " canvasWidth=" + $("pairPlot").width + " canvasHeight=" + $("pairPlot").height;
+	// Finally, we convert to chart X and Y.
+	var chartX = toChartX(plot, x);
+	var chartY = toChartY(plot, y);
+	//$("Notes4").innerHTML = "chart x: " + x + " y: " + y;
+	// Return chart X and Y.
+	return {x: chartX, y: chartY}
+}
+
+function getClosestShuffleStatsIndex(chartXY) {
+var minDistance = null;
+var distance = null;
+var closestIndex = null;
+	
+	for (var i=0; i < g_scrambleStats.length; i++) {
+		// Compute squared distance from chartXY to observation i;
+		// Do this in terms of canvas coordinates, just in case we are dealing with very large (chart) data,
+		// which means the (chart) distances are huge even if we are just next to the point on the chart.
+		var chartX = g_scrambleStats[i].histogramChartX;
+		var chartY = g_scrambleStats[i].histogramChartY;
+		distance = Math.pow(toCanvasX(g_histogram, chartX) - toCanvasX(g_histogram, chartXY.x), 2) 
+			+ Math.pow(toCanvasY(g_histogram, chartY) - toCanvasY(g_histogram, chartXY.y), 2);
+		if (distance <= g_minDistanceForSelect) {
+			// Distance is small enough. See if it's smallest so far.
+			if (minDistance == null || (minDistance != null && distance < minDistance)) {
+				// First one, or smallest distance so far, take it. 
+				minDistance = distance;
+				closestIndex = i;
+			}
+		}
+	}
+	return closestIndex;
+}
+
+function onMouseDown(event) {
+	// Get chart X and Y of mouse.
+	var chartXY = getMouseDownChartXY(g_samplePlot, event);
+	// If user didn't click on chart, then exit early.
+	if (chartXY == null) {
+		var chartXY = getMouseDownChartXY(g_histogram, event);
+		if (chartXY != null){
+			var histStatChoice = getHistStatChoice();
+			var closestShuffleStatsIndex = getClosestShuffleStatsIndex(chartXY);
+			if (closestShuffleStatsIndex == null) {
+				var countInput = parseFloat($("countInput").value);
+				var x = countInput;	
+				var distance = Math.pow(toCanvasX(g_histogram, x) - toCanvasX(g_histogram, chartXY.x), 2);
+				if (distance <= g_minDistanceForSelect) {
+						// Have selected line rather than a dot. Start tracking movement.
+						if (g_isTouchInterface) {
+							document.ontouchmove = onMouseMoveLine;
+						} else {
+							document.onmousemove = onMouseMoveLine;	
+						}
+						// prevent cursor from changing to "text selection" cursor while dragging.
+						document.onselectstart = function () { return false; };
+				}
+				return;
+			}
+			// Display this shuffle
+//need g_scrabmleIndex to show the new line
+			g_scrambleIndex = g_scrambleStats[closestShuffleStatsIndex].scrambleIndex; //this needs to be an array
+//			g_scrambleIndex = closestShuffleStatsIndex;
+			// Save which shuffle is selected, so it can be highlighted in histogram
+			g_scrambleStatsSelectedIndex = closestShuffleStatsIndex;  //this is the selected index
+			// Redraw, so the shuffle in question gets displayed.
+			redraw();
+			// Reset which shuffle is selected, so we don't keep highlighting it.
+			g_scrambleStatsSelectedIndex = null;
+		}
+	return;
+	}
+	// debug: $("Notes3").innerHTML = "chartXY.x=" + chartXY.x+ " chartXY.y=" + chartXY.y;
+	// Clear selected observation, if any, if user clicks anywhere else on chart.
+	g_selectedObsIndex = null;
+	// See if we are moving the movable line.
+	// Check for this first -- if movable line is displayed, chances are we want to move it rather than a data point,
+	// but if user doesn't click on any of the three movable line points (left, middle, right), then still allow
+	// them to select and move a data point.
+	var closestMovableIndex = getClosestMovableIndex(chartXY);
+	if (closestMovableIndex != null) {
+		// Mark that we are moving the movable line.
+		g_movingMovableIndex = closestMovableIndex;
+	} else {
+		// Not moving the movable line.
+		// Find closest observation that falls within a small window of chartXY.
+		var closestObsIndex = getClosestObsIndex(chartXY);
+		// See if we are moving an observation.
+		if (closestObsIndex != null) {
+			// Mark that we are moving this observation.
+			g_movingObsIndex = closestObsIndex;
+			// Mark that we have selected this observation.
+			g_selectedObsIndex = closestObsIndex;
+		} else {
+			// Not moving an observation, or the movable line, so exit early.
+			// Redraw first, in case we've changed selected point.
+			redraw();
+			return;
+		}
+	}
+	// Start tracking movement.
+	if (g_isTouchInterface) {
+		document.ontouchmove = onMouseMove;
+	} else {
+		document.onmousemove = onMouseMove;	
+	}
+	// prevent cursor from changing to "text selection" cursor while dragging.
+	document.onselectstart = function () { return false; };
+	// Redraw, so if we've selected a point, it will get highlighted.
+	redraw();
+};
+
+function StatCom(q, i, j, b){
+	k=i; zz=1; z=zz;
+	while(k<=j){
+		zz=zz*q*k/(k-b);
+		z=z+zz;
+		k=k+2;
+	}
+	return z;
+};
+
+function StudT(t, n){
+	t=Math.abs(t);
+	w=t/Math.sqrt(n);
+	th=Math.atan(w);
+	if (n==1){ return 1-th/(Math.PI/2.0);}
+	sth = Math.sin(th);
+	cth=Math.cos(th);
+	if ((n%2)==1) return 1-(th+sth*cth*StatCom(cth*cth,2,n-3,-1))/(Math.PI/2.0);
+	else return 1-sth*StatCom(cth*cth,1,n-3,-1);
+};
+
+function onMouseMoveLine(event) {
+	if (g_isTouchInterface) {
+		// We want to drag a point or movable line around, not do scrolling (default action of touchmove on touch interface).
+		event.preventDefault();
+	}
+	// Get chart X and Y of mouse.
+	var chartXY = getMouseDownChartXY(g_histogram, event);
+	if (chartXY == null) {
+		// Moved off the chart - do something reasonable.
+	} else {
+		// Still on chart - display new position.
+		//bc$("MovingChartXY").innerHTML = "ChartX: " + chartXY.x.toFixed(2) + " ChartY: " + chartXY.y.toFixed(2);
+			// We are moving the highlight line
+			// Change its position
+			//g_extremeAsX = Math.round(chartXY.x);
+			$("countInput").value	=Math.round(chartXY.x*100)/100;	
+			// Boundary checks
+//			if (g_extremeAsX < g_minX) {
+//				// Below minimum X value, so set to minimum X value.
+//				g_extremeAsX = g_minX;
+//			}
+//			if (g_extremeAsX > g_maxX) {
+//				// Below maximum X value, so set to maximum X value.
+//				g_extremeAsX = g_maxX;
+//			}
+			// Update "extremeAs" input
+//			if (bc$("extremeProportion").checked) {
+//				// Need to convert to proportion
+//				bc$("extremeAs").value = (g_extremeAsX / g_numberOfAttempts).toFixed(3).replace(".000","");
+//			} else {
+				// Update directly
+//				bc$("extremeAs").value = g_extremeAsX;
+//		}
+			// Redraw the chart.
+			redraw();
+		
+	}
+}
+	
+function onMouseMove(event) {
+	if (g_isTouchInterface) {
+		// We want to drag a point or movable line around, not do scrolling (default action of touchmove on touch interface).
+		event.preventDefault();
+	}
+	// Get chart X and Y of mouse.
+	var chartXY = getMouseDownChartXY(g_samplePlot, event);
+	if (chartXY == null) {
+		// Moved off the chart - do something reasonable.
+	} else {
+		// Still on chart - display new position.
+		var p = $("MovingChartXY");  
+		p.innerHTML = "ChartX: " + chartXY.x.toFixed(2) + " ChartY: " + chartXY.y.toFixed(2);
+		// Only allow moving an observation if "move observations" checked.
+		if (g_movingObsIndex != null && $("moveObservations").checked) {
+			// We are moving a point. 
+			g_keepOriginal = true;
+			// Change the observation.
+			g_obsX[g_movingObsIndex] = chartXY.x;
+			g_obsY[g_movingObsIndex] = chartXY.y;
+			// Update data textbox to reflect change in data.
+			updateDataText();
+			// Redraw the chart.
+			redraw();
+		}
+		// Allow moving the movable line even if "move observations" not checked.
+		if (g_movingMovableIndex != null) {
+			// We are moving the movable line.
+			// Compute current middle X/Y on movable line. We will need this if moving left or right end.
+			var middleX = g_samplePlot.minX + (g_samplePlot.maxX - g_samplePlot.minX) / 2.0;
+			var middleY = g_movableLineIntercept + g_movableLineSlope * middleX;
+			switch (g_movingMovableIndex)  {
+				case 0: // left end. 
+					// Adjust the intercept and slope so that left-end has new y-value, and center remains fixed.
+					var newLeftX = g_samplePlot.minX;
+					var newLeftY = chartXY.y;
+					// Set movable line slope to current slope between newLeft and middle.
+					g_movableLineSlope = (middleY - newLeftY) / (middleX - newLeftX);
+					break;
+				case 1: // middle.
+					// Adjust intercept so that middleY changes to chartXY.y;
+					middleY = chartXY.y;
+					break;
+				case 2: // right end.
+					// Adjust the intercept and slope so that right-end has new y-value, and center remains fixed.
+					var newRightX = g_samplePlot.maxX;
+					var newRightY = chartXY.y;
+					// Set movable line slope to current slope between middle and newRight.
+					g_movableLineSlope = (newRightY - middleY) / (newRightX - middleX);
+					break;
+			}
+			// Set intercept so that middle point is correct.
+			// We want: new(g_movableLineIntercept) + g_movableLineSlope * middleX = middleY.
+			// So new(g_movableLineIntercept) = middleY - g_movableLineSlope * middleX
+			g_movableLineIntercept = middleY - g_movableLineSlope * middleX;
+			// Redraw the chart.
+			redraw();
+		}
+	}
+};
+
+function onMouseUp(event) {
+	// Stop tracking movement.
+	if (g_isTouchInterface) {
+		document.ontouchmove = null;
+	} else {
+		document.onmousemove = null;
+	}
+	// Clear x/y note.
+	var p = $("MovingChartXY");  
+	p.innerHTML = "";
+	
+	// Mark that we are no longer moving an observation.
+	g_movingObsIndex = null;
+	// Mark that we are no longer moving the movable line.
+	g_movingMovableIndex = null;
+	// Return mouse-down selection behavior to default.
+	document.onselectstart = function () {};
+};
+
+function getSampleObsStats(scrambleIndex) {
+var sumX = 0;
+var sumY = 0;
+var sumXSq = 0;
+var sumYSq = 0;
+var sumXY = 0;
+var minX = null;
+var minY = null;
+var maxX = null;
+var maxY = null;
+var rangeX = 0;
+var rangeY = 0;
+var regSlope = null;
+var regIntercept = null;
+var avgY = 0;
+var movableSSE = 0;
+var movableSAE = 0;
+var SST=0;
+var sxy = 0;
+var sxx = 0;
+var correlation = 0;
+var rsquared = 0;
+var regressionSSE = 0;
+var regressionSAE = 0;
+var regressionSE = 0;
+var slopeSE=0; var slopet=0; var slopep=0;
+var interceptSE=0; var interceptt=0; var interceptp=0;
+var tempvalue=0;
+var movableResiduals = new Array();
+var regressionResiduals = new Array();
+
+	// If scrambleIndex not passed in, use g_scrambleIndex[]. */
+	if (scrambleIndex == undefined) {
+		scrambleIndex = g_scrambleIndex;
+	}
+	// Note: We don't need to use g_obsY[scrambleIndex[i]] for some of the following (e.g. for sumX it doesn't matter).
+	// But in other cases it does matter, e.g. for SumXY it does matter.
+	// For now, we only use scrambleIndex[] when it matters.
+	for(i=0; i<g_sampleSize; i++) {
+		sumX += g_obsSampleX[i];
+		sumY += g_obsSampleY[i];
+		sumXSq += Math.pow(g_obsSampleX[i],2);
+		sumYSq += Math.pow(g_obsSampleY[i],2);
+		sumXY += g_obsSampleX[i] * g_obsSampleY[i];
+		if (i==0) {
+			minX = g_obsSampleX[i];
+			maxX = g_obsSampleX[i];
+			minY = g_obsSampleY[i];
+			maxY = g_obsSampleY[i];
+		} else {
+			if (g_obsSampleX[i] < minX) minX = g_obsSampleX[i];
+			if (g_obsSampleX[i] > maxX) maxX = g_obsSampleX[i];
+			if (g_obsSampleY[i] < minY) minY = g_obsSampleY[i];
+			if (g_obsSampleY[i] > maxY) maxY = g_obsSampleY[i];
+		}
+	}
+	if (g_sampleSize> 0) {
+		avgY = sumY / g_sampleSize;
+		avgX = sumX / g_sampleSize;
+		rangeX = maxX - minX;
+		rangeY = maxY - minY;
+	}
+	if (g_sampleSize > 0 && sumXSq > 0){
+		sxy = sumXY - avgX*avgY*g_sampleSize;
+		sxx = sumXSq - Math.pow(sumX,2)/g_sampleSize;
+		regSlope = (sumXY - sumX * sumY / g_sampleSize) / (sumXSq - Math.pow(sumX,2) / g_sampleSize);
+		regIntercept = (sumY - regSlope * sumX) / g_sampleSize;
+		SST = sumYSq-Math.pow(sumY,2)/g_sampleSize;
+		correlation = sxy/Math.sqrt(sxx*SST);
+		rsquared=100.0*Math.pow(correlation, 2);
+	}
+	if (g_sampleSize> 0 && g_movableLineIntercept != null){
+		for (i=0; i<g_sampleSize; i++){
+			movableResiduals[i] = g_obsSampleY[i]- g_movableLineIntercept - g_movableLineSlope*g_obsSampleX[i];
+			movableSSE += Math.pow(movableResiduals[i],2);
+			movableSAE += Math.abs(movableResiduals[i]);
+		}
+	}
+	if (g_sampleSize > 0 && regSlope != null){
+		for (i=0; i<g_sampleSize; i++){
+			regressionResiduals[i] = g_obsSampleY[i] - regIntercept - regSlope * g_obsSampleX[i];
+			regressionSSE += Math.pow(regressionResiduals[i],2) ;
+			regressionSAE += Math.abs(regressionResiduals[i]);
+		}
+	}
+	regressionSE = Math.sqrt(regressionSSE/(g_sampleSize-2));
+	if (g_sampleSize > 2 && sxx > 0){
+		slopeSE=Math.sqrt(regressionSSE/(sxx*(g_sampleSize-2)));
+		slopet=regSlope/slopeSE;
+		interceptSE=Math.sqrt(regressionSSE/(g_sampleSize-2)*(1.0/g_sampleSize+Math.pow(avgX,2)/sxx));
+		interceptt=regIntercept/interceptSE;
+		tempvalue= 1-StudT(interceptt,g_sampleSize-2)/2.0;
+		if (interceptt<0) tempvalue=1-tempvalue;
+		if (tempvalue >.5) interceptp = 2*(1-tempvalue);
+		else interceptp=2*tempvalue;
+		tempvalue=1-StudT(slopet,g_sampleSize-2)/2.0;
+		if (slopet<0) tempvalue=1-tempvalue;
+		if (tempvalue>.5) slopep=2*(1-tempvalue);
+		else slopep=2*tempvalue;
+	}
+	return {
+		sumX: sumX, sumY: sumY, sumXSq: sumXSq, sumYSq: sumYSq, sumXY: sumXY, minX: minX, minY: minY, maxX: maxX, maxY: maxY, 
+		rangeX: rangeX, rangeY: rangeY,
+		avgY: avgY, regSlope: regSlope, regIntercept: regIntercept,
+		movableResiduals: movableResiduals, regressionResiduals: regressionResiduals,
+		movableSSE: movableSSE, regressionSSE: regressionSSE, regressionSE: regressionSE,
+		movableSAE: movableSAE, regressionSAE: regressionSAE,
+		correlation: correlation, rsquared: rsquared,
+		interceptSE: interceptSE, interceptt: interceptt, interceptp: interceptp,
+		slopeSE: slopeSE, slopet: slopet, slopep: slopep
+	}
+};
+
+
+
+// Compute summary statistics for observations.
+function getObsStats(scrambleIndex) {
+var sumX = 0;
+var sumY = 0;
+var sumXSq = 0;
+var sumYSq = 0;
+var sumXY = 0;
+var minX = null;
+var minY = null;
+var maxX = null;
+var maxY = null;
+var rangeX = 0;
+var rangeY = 0;
+var regSlope = null;
+var regIntercept = null;
+var avgY = 0;
+var movableSSE = 0;
+var movableSAE = 0;
+var SST=0;
+var sxy = 0;
+var sxx = 0;
+var correlation = 0;
+var rsquared = 0;
+var regressionSSE = 0;
+var regressionSAE = 0;
+var regressionSE = 0;
+var slopeSE=0; var slopet=0; var slopep=0;
+var interceptSE=0; var interceptt=0; var interceptp=0;
+var tempvalue=0;
+var movable = new Array();
+var regressionResiduals = new Array();
+var movableResiduals = new Array();
+
+	// If scrambleIndex not passed in, use g_scrambleIndex[]. */
+	if (scrambleIndex == undefined) {
+		scrambleIndex = g_scrambleIndex;
+	}
+	// Note: We don't need to use g_obsY[scrambleIndex[i]] for some of the following (e.g. for sumX it doesn't matter).
+	// But in other cases it does matter, e.g. for SumXY it does matter.
+	// For now, we only use scrambleIndex[] when it matters.
+	for(i=0; i<g_numObs; i++) {
+		sumX += g_obsX[i];
+		sumY += g_obsY[i];
+		sumXSq += Math.pow(g_obsX[i],2);
+		sumYSq += Math.pow(g_obsY[i],2);
+		sumXY += g_obsX[i] * g_obsY[scrambleIndex[i]];
+		if (i==0) {
+			minX = g_obsX[i];
+			maxX = g_obsX[i];
+			minY = g_obsY[i];
+			maxY = g_obsY[i];
+		} else {
+			if (g_obsX[i] < minX) minX = g_obsX[i];
+			if (g_obsX[i] > maxX) maxX = g_obsX[i];
+			if (g_obsY[i] < minY) minY = g_obsY[i];
+			if (g_obsY[i] > maxY) maxY = g_obsY[i];
+		}
+	}
+	if (g_numObs > 0) {
+		avgY = sumY / g_numObs;
+		avgX = sumX / g_numObs;
+		rangeX = maxX - minX;
+		rangeY = maxY - minY;
+	}
+	if (g_numObs > 0 && sumXSq > 0){
+		sxy = sumXY - avgX*avgY*g_numObs;
+		sxx = sumXSq - Math.pow(sumX,2)/g_numObs;
+		regSlope = (sumXY - sumX * sumY / g_numObs) / (sumXSq - Math.pow(sumX,2) / g_numObs);
+		regIntercept = (sumY - regSlope * sumX) / g_numObs;
+		SST = sumYSq-Math.pow(sumY,2)/g_numObs;
+		correlation = sxy/Math.sqrt(sxx*SST);
+		rsquared=100.0*Math.pow(correlation, 2);
+	}
+	if (g_numObs > 0 && g_movableLineIntercept != null){
+		for (i=0; i<g_numObs; i++){
+			movableResiduals[i] = g_obsY[scrambleIndex[i]] - g_movableLineIntercept - g_movableLineSlope*g_obsX[i];
+			movableSSE += Math.pow(movableResiduals[i],2);
+			movableSAE += Math.abs(movableResiduals[i]);
+		}
+	}
+	if (g_numObs > 0 && regSlope != null){
+		for (i=0; i<g_numObs; i++){
+			regressionResiduals[i] = g_obsY[scrambleIndex[i]] - regIntercept - regSlope * g_obsX[i];
+			regressionSSE += Math.pow(regressionResiduals[i],2) ;
+			regressionSAE += Math.abs(regressionResiduals[i]);
+		}
+	}
+	regressionSE = Math.sqrt(regressionSSE/(g_numObs-2));
+	if (g_numObs > 2 && sxx > 0){
+		slopeSE=Math.sqrt(regressionSSE/(sxx*(g_numObs-2)));
+		slopet=regSlope/slopeSE;
+		interceptSE=Math.sqrt(regressionSSE/(g_numObs-2)*(1.0/g_numObs+Math.pow(avgX,2)/sxx));
+		interceptt=regIntercept/interceptSE;
+		tempvalue= 1-StudT(interceptt,g_numObs-2)/2.0;
+		if (interceptt<0) tempvalue=1-tempvalue;
+		if (tempvalue >.5) interceptp = 2*(1-tempvalue);
+		else interceptp=2*tempvalue;
+		tempvalue=1-StudT(slopet,g_numObs-2)/2.0;
+		if (slopet<0) tempvalue=1-tempvalue;
+		if (tempvalue>.5) slopep=2*(1-tempvalue);
+		else slopep=2*tempvalue;
+	}
+	var SDX = Math.sqrt((sumXSq-g_numObs*avgX*avgX)/(g_numObs-1));
+	var SDY = Math.sqrt((sumYSq - g_numObs*avgY*avgY)/(g_numObs-1));
+	return {
+		sumX: sumX, sumY: sumY, sumXSq: sumXSq, sumYSq: sumYSq, sumXY: sumXY, minX: minX, minY: minY, maxX: maxX, maxY: maxY, 
+		rangeX: rangeX, rangeY: rangeY,
+		avgX: avgX, avgY: avgY, regSlope: regSlope, regIntercept: regIntercept,
+		SDX: SDX , SDY: SDY,
+		movableResiduals: movableResiduals, regressionResiduals: regressionResiduals,
+		movableSSE: movableSSE, regressionSSE: regressionSSE, regressionSE: regressionSE,
+		movableSAE: movableSAE, regressionSAE: regressionSAE,
+		correlation: correlation, rsquared: rsquared,
+		interceptSE: interceptSE, interceptt: interceptt, interceptp: interceptp,
+		slopeSE: slopeSE, slopet: slopet, slopep: slopep
+	}
+};
+
+// Compute basic array stats... accept length as parameter in case we are reusing an array and don't have as many entries as are defined for array.
+// If histBinCount > 0, then also compute histogram.
+// If minAtLeast specified, and min not less than minAtLeast, then set min = minAtLeast.
+// If maxAtLeast specified, and max not more than maxAtLeast, then set max = maxAtLeast.
+function getArrayStats(dataArray, arrayCount, attributeName, histBinCount, minAtLeast, maxAtLeast) {
+var dataValue = null;
+var min = null;
+var max = null;
+var range = 0;
+var sum = 0;
+var avg = 0;
+var sumSq = 0;
+var sampleStdDev = 0;
+var binWidth = 0;
+var hist = new Array();
+var maxBinCount = 0;
+var bin = 0;
+	
+	for (i=0; i<arrayCount; i++) {
+		dataValue = dataArray[i][attributeName];
+		if (i==0) {
+			min = dataValue;
+			max = dataValue;
+		} else {
+			if (dataValue < min) min = dataValue;
+			if (dataValue > max) max = dataValue;
+		}
+		sum += dataValue;
+		sumSq += Math.pow(dataValue,2);
+	}
+	if (minAtLeast != undefined) {
+		if (min > minAtLeast) {
+			// Force the min
+			min = minAtLeast;
+		}
+	}
+	if (maxAtLeast != undefined) {
+		if (max < maxAtLeast) {
+			// Force the max
+			max = maxAtLeast;
+		}
+	}
+	if (arrayCount > 0) {
+		if (arrayCount > 1) {
+			sampleStdDev = Math.pow((arrayCount * sumSq - Math.pow(sum,2)) / (arrayCount*(arrayCount-1)), 0.5);
+		}
+		avg = sum / arrayCount;
+		range = max - min;
+		if (histBinCount > 0) {
+			// Compute histogram bin width
+			binWidth = range / histBinCount;
+			// Compute histogram
+			// If min = 0 and max = 1 and binCount = 10, then binWidth = 0.10. 
+			// Bin 0 left-edge is 0, 1 left-edge is 0.1, ... bin 9 left-edge is 0.9, bin right-edge is 1.0. 
+			// If our convention is that bin goes from [left-edge, right-edge), we run into trouble with max.
+			// Our binCount(10) bins are numbered 0 to 9 (binCount-1), and (max-min)/binWidth = (1-0)/0.1 = 10.
+			// So if bin >= binCount, we set bin = binCount-1 to handle this case.
+			// Set midpoint for each bin, that's where we'll plot the points.
+			// Initialize count for each bin.
+			for(bin=0; bin < histBinCount; bin++) {
+				hist[bin] = {
+					left: min + bin * binWidth,
+					midPoint: min + (bin + 0.5) * binWidth, 
+					right: min + (bin+1) * binWidth,
+					count: 0,
+					indexArray: new Array()
+				};
+			}
+			// If there's only one datapoint (or all datapoints the same), then bin widths will be zero and we won't generate that first point.
+			// Instead, all bins will have same midpoint, so just increment count for first one and leave it at that.
+			// Also, maxBinCount will be this same count, so set that.
+			if (binWidth == 0) {
+				// Setup indexArray[] - all entries just point to corresponding index in dataArray.
+					for(var i=0; i<arrayCount; i++) {
+						hist[0].indexArray[i] = i;
+					}
+				hist[0].count = arrayCount;
+				maxBinCount = arrayCount;
+				binWidth=.5; //fix
+			}
+			if (binWidth > 0) {
+				for (i=0; i<arrayCount; i++) {
+					dataValue = dataArray[i][attributeName];
+					bin = Math.floor((dataValue - min) / binWidth);
+					if (bin >= histBinCount) {
+						// Allow last bin to be [left-edge, right-edge] rather than [left-edge, right-edge).
+						bin = histBinCount-1;
+					}
+					// Save the index value in indexArray
+					// This is required so that when user clicks on a point in the histogram, we can tie that particular histogram
+					// point back to original data that created it.
+					hist[bin].indexArray[hist[bin].count] = i;
+
+					// Increment count.
+					hist[bin].count++;
+					// Check for new max.
+					if (hist[bin].count > maxBinCount) {
+						maxBinCount = hist[bin].count;
+					}
+				}
+			}
+		}
+	}
+	return {
+		min: min, max: max, range: range, sum: sum, avg: avg, sumSq: sumSq, sampleStdDev: sampleStdDev,
+		binWidth: binWidth, hist: hist, maxBinCount: maxBinCount
+	}
+};
+
+// Compute scramble stats and histograms.
+function getScrambleStats() {
+	var correlationStats = getArrayStats(g_scrambleStats, g_scrambleCount, "correlation", g_histogram.binCount, undefined, undefined);
+	var slopeStats = getArrayStats(g_scrambleStats, g_scrambleCount, "slope", g_histogram.binCount, undefined, undefined);
+	// For t-ratio, force min/max to be at least -4, 4... this way we get a reasonable density curve even if we only have a few scrambles.
+	var tRatioStats = getArrayStats(g_scrambleStats, g_scrambleCount, "tRatio", g_histogram.binCount, -4.0, 4.0);
+	return {
+		correlationStats: correlationStats,
+		slopeStats: slopeStats,
+		tRatioStats: tRatioStats,
+		}
+};
+
+
+// Convert chart Y values (0 is at bottom) to canvas Y values (0 is at top).
+// Leave space at bottom for x-axis border.
+// Start by subtracting off minY, to make relative. Then multiply by chartToCanvasScaleY.
+// Subtract from canvas height, and leave space for x-axis border.
+function toCanvasY(plot, chartY) {
+	return (plot.canvasHeight - (chartY-plot.minY) * plot.chartToCanvasScaleY - plot.xBorderWidth);
+};
+
+// Convert canvas Y values (0 is at top) to chart Y values.
+// Handle space at bottom for x-axis border.
+// canvasY = canvasHeight - (chartY-minY) * chartToCanvasScaleY - xBorderWidth
+// so chartY = (canvasHeight - canvasY - xBorderWidth) / chartToCanvasScaleY + minY;
+function toChartY(plot, canvasY) {
+	if (plot.chartToCanvasScaleY > 0) {
+		return ((plot.canvasHeight - canvasY - plot.xBorderWidth) / plot.chartToCanvasScaleY + plot.minY);
+	} else {
+		return null;
+	}
+};
+
+// Convert chart X values to canvas X values (add on y-axis border width).
+// Start by subtracting off minX, to make relative. Then multiply by chartToCanvasScaleX.
+// Finally, add on border width to leave space for y-axis border.
+function toCanvasX(plot, chartX) {
+	return ((chartX-plot.minX) * plot.chartToCanvasScaleX + plot.yBorderWidth);
+};
+
+// Convert canvas X values to chart X values.
+// canvasX = (chartX-minX) * chartToCanvasScaleX + yBorderWidth
+// so chartX = (canvasX - yBorderWidth) / chartToCanvasScaleX + minX;
+function toChartX(plot, canvasX) {
+	if (plot.chartToCanvasScaleX > 0) {
+		return ((canvasX - plot.yBorderWidth) / plot.chartToCanvasScaleX + plot.minX);
+	} else {
+		return null;
+	}
+};
+
+function getClosestObsIndex(chartXY) {
+var minDistance = null;
+var distance = null;
+var closestObs = null;
+	
+	for (i=0; i<g_numObs; i++) {
+		// Compute squared distance from chartXY to observation i;
+		// Do this in terms of canvas coordinates, just in case we are dealing with very large (chart) data,
+		// which means the (chart) distances are huge even if we are just next to the point on the chart.
+		distance = Math.pow(toCanvasX(g_samplePlot, g_obsX[i]) - toCanvasX(g_samplePlot, chartXY.x), 2) 
+			+ Math.pow(toCanvasY(g_samplePlot, g_obsY[g_scrambleIndex[i]]) - toCanvasY(g_samplePlot, chartXY.y), 2);
+		if (distance <= g_minDistanceForSelect) {
+			// Distance is small enough. See if it's smallest so far.
+			if (minDistance == null || (minDistance != null && distance < minDistance)) {
+				// First one, or smallest distance so far, take it. 
+				minDistance = distance;
+				closestObs = i;
+			}
+		}
+	}
+	return closestObs;
+};
+
+// Find closest (if any) left/middle/right point on movable line.
+// Returns 0 if close to left end, 1 if close to middle, 2 if close to right end.
+function getClosestMovableIndex(chartXY) {
+var distance; 
+var x;
+var y;
+	
+	// If not displaying movable line, exit early.
+	if (!$("showMovableLine").checked) {
+		return null;
+	}
+	// Note: Compute distances in terms of canvas coordinates, just in case we are dealing with very large (chart) data,
+	// which means the (chart) distances are huge even if we are just next to the point on the chart.
+	// 0: left-end of movable line.
+	x = g_samplePlot.minX;
+	y = g_movableLineIntercept + x * g_movableLineSlope;
+	// Compute squared distance from chartXY to this point on movable line.
+	distance = Math.pow(toCanvasX(g_samplePlot, x) - toCanvasX(g_samplePlot, chartXY.x), 2) + Math.pow(toCanvasY(g_samplePlot, y) - toCanvasY(g_samplePlot, chartXY.y), 2);
+	// $("Notes5").innerHTML = "distance left: " + distance;
+	if (distance <= g_minDistanceForSelect) {
+		return 0; // left-end of movable line.
+	}
+	// 1: center of movable line.
+	x = g_samplePlot.minX + (g_samplePlot.maxX - g_samplePlot.minX)/2.0;
+	y = g_movableLineIntercept + x * g_movableLineSlope;
+	// Compute squared distance from chartXY to this point on movable line.
+	distance = Math.pow(toCanvasX(g_samplePlot, x) - toCanvasX(g_samplePlot, chartXY.x), 2) + Math.pow(toCanvasY(g_samplePlot, y) - toCanvasY(g_samplePlot, chartXY.y), 2);
+	// $("Notes6").innerHTML = "distance center: " + distance;
+	if (distance <= g_minDistanceForSelect) {
+		return 1; // center of movable line.
+	}
+	// 2: right-end of movable line.
+	x = g_samplePlot.maxX;
+	y = g_movableLineIntercept + x * g_movableLineSlope;
+	// Compute squared distance from chartXY to this point on movable line.
+	distance = Math.pow(toCanvasX(g_samplePlot, x) - toCanvasX(g_samplePlot, chartXY.x), 2) + Math.pow(toCanvasY(g_samplePlot, y) - toCanvasY(g_samplePlot, chartXY.y), 2);
+	// $("Notes7").innerHTML = "distance right: " + distance;
+	if (distance <= g_minDistanceForSelect) {
+		return 2; // left-end of movable line.
+	}
+	return null;
+};
+
+
+function setPageLastModified() {
+var p = $("PageLastModified");  
+var lastModified = document.lastModified;
+
+	if (Date.parse(document.lastModified) > 0) {
+		p.innerHTML = "Page last modified " + lastModified.toLocaleString();
+	}
+};
+
+function samplePlotSetup(plot) {
+var canvas = $(plot.canvasName);  
+var ctx = canvas.getContext("2d");  
+
+	setSamplePlotMinMax(plot);
+	setPlotScale(plot);
+	drawAxes(plot, ctx);
+	writeXAxisTitle(plot, ctx);
+	writeYAxisTitle(plot, ctx);
+	writeXAxisLabels(plot, ctx);
+	writeYAxisLabels(plot, ctx);
+};
+
+function histogramSetup() {
+var canvas = $("histogram");  
+var ctx = canvas.getContext("2d");  
+g_histogram.yTitle = t_countLabel[g_language];
+
+	if ($("scrambleShowSlope").checked) {
+		if (g_language == 1) g_histogram.xTitle =  t_slope[g_language] + " " + t_shuffled[g_language];
+			else g_histogram.xTitle =  t_shuffled[g_language] + " " + t_slope[g_language];
+		if (g_setPopulation) {
+			if (g_language == 1) g_histogram.xTitle =  t_slope[g_language] + " " + t_sampled[g_language];
+			else g_histogram.xTitle = t_sampled[g_language] + " " + t_slope[g_language];
+		}
+	}
+	if ($("scrambleShowCorrelation").checked) {
+		if (g_language == 1) g_histogram.xTitle =  t_corrAbbr[g_language] + " " + t_shuffled[g_language];
+		else g_histogram.xTitle = t_shuffled[g_language] + " " + t_corrAbbr[g_language]; 
+		if (g_setPopulation) {
+			if (g_language == 1) g_histogram.xTitle =  t_corrAbbr[g_language] + " " + t_sampled[g_language];
+			else g_histogram.xTitle =  t_sampled[g_language] + " " + t_corrAbbr[g_language];
+		}
+	}
+	if ($("scrambleShowTRatio").checked) {
+		if (g_language == 1) g_histogram.xTitle =  t_tstatisticText[g_language] + " " + t_shuffled[g_language];
+		else g_histogram.xTitle = t_shuffled[g_language] + " " + t_tstatisticText[g_language]; 
+		if (g_setPopulation) {
+			if (g_language == 1) g_histogram.xTitle =  t_tstatisticText[g_language] + " " + t_sampled[g_language];
+			else g_histogram.xTitle = t_sampled[g_language] + " " + t_tstatisticText[g_language];
+		}
+	}
+	if ($("scrambleShowIntercept").checked) {
+		if (g_language == 1) g_histogram.xTitle =  t_intercept[g_language] + " " + t_shuffled[g_language];
+		else g_histogram.xTitle = t_shuffled[g_language] + " " + t_intercept[g_language];
+		if (g_setPopulation) {
+			if (g_language == 1) g_histogram.xTitle =  t_intercept[g_language] + " " + t_sampled[g_language];
+			else g_histogram.xTitle = t_sampled[g_language] + " " + t_intercept[g_language];
+		}
+	}
+	//if (!g_noaxischanges) 
+	setHistogramMinMax();
+	setPlotScale(g_histogram);
+	drawAxes(g_histogram, ctx);
+	writeXAxisTitle(g_histogram, ctx);
+	writeYAxisTitle(g_histogram, ctx);
+	writeXAxisLabels(g_histogram, ctx);
+	writeYAxisLabels(g_histogram, ctx);
+};
+
+function setSamplePlotMinMax(plot) {
+var stats = getObsStats(g_scrambleIndex);
+var xScalingFactor = 1;
+var yScalingFactor = 1;
+
+	// Debug: 
+	// $("Notes").innerHTML = "minX=" + stats.minX + " maxX="+stats.maxX;
+	// Set chart minimum and maximum x and y values.
+	// For x axis, leave 20% beyond largest observations (so push right side out, but not left side), to provide extra space for squared residuals.
+	// If range is small, then increase scaling factor, so our min/max are pushed to tenths rather than whole numbers.
+	if (stats.rangeX <= 1) {
+		xScalingFactor = 10;
+	}
+if (!g_noaxischanges){
+	plot.minX = Math.floor(xScalingFactor * (stats.minX - 0.10 * stats.rangeX)) / xScalingFactor;
+	plot.maxX = Math.ceil(xScalingFactor * (stats.maxX + 0.20 * stats.rangeX)) / xScalingFactor;
+
+
+	}
+	
+	// For y axis, leave 10% beyond smallest/largest observations.
+	// If range is small, then increase scaling factor, so our min/max are pushed to tenths rather than whole numbers.
+	if (stats.rangeY <= 1) {
+		yScalingFactor = 10;
+	}
+	if (!g_noaxischanges){
+	plot.minY = Math.floor(yScalingFactor * (stats.minY - 0.10 * stats.rangeY)) / yScalingFactor;
+	plot.maxY = Math.ceil(yScalingFactor * (stats.maxY + 0.10 * stats.rangeY)) / yScalingFactor;
+	}
+	if ($("showRegressionSquaredResiduals").checked || $("showMovableSquaredResiduals").checked){
+		// when show squares, the right side squares go off the canvas, so we adjust xmin to reflect the possible square size
+		// we have to do this in terms of pixels (to preserve the square shape), we can't call toCanvasX and to CanvasY but we 
+		// haven't determine the scaling factors yet so we determine the scaling factors here 
+		var chartToCanvasScaleY = plot.usableCanvasHeight / (plot.maxY - plot.minY);
+		var chartToCanvasScaleX = plot.usableCanvasWidth / (plot.maxX - plot.minX);
+		for (var i=0; i<g_numObs; i++) {
+			//var yhat=	stats.regIntercept+ g_obsX[i]*stats.regSlope;
+			var resid = Math.abs(g_obsY[i]-stats.avgY);
+			var residpixels = resid*chartToCanvasScaleY;
+			var xplusresidpixels = (g_obsX[i]-plot.minX) * chartToCanvasScaleX + plot.yBorderWidth + residpixels;
+			var xplusresid = xplusresidpixels/chartToCanvasScaleX + plot.minX;
+			if (xplusresid > plot.maxX) plot.maxX = xplusresid;
+		}
+	}	
+};
+
+
+
+function setHistogramMinMax() {
+var histogramChoice = getHistogramChoice();
+var sampleStats = null;
+var stats = getScrambleStats();
+var extremeAs = parseFloat($("countInput").value);
+
+	if ($("scrambleShowTRatio").checked) {
+		// For t-ratio, force min/max to be at least -4, 4... this way we get a reasonable density curve even if we only have a few scrambles.
+		sampleStats = getArrayStats(g_scrambleStats, g_scrambleCount, histogramChoice, g_histogram.binCount, -4.0, 4.0);
+	} else {
+		sampleStats = getArrayStats(g_scrambleStats, g_scrambleCount, histogramChoice, g_histogram.binCount);
+	}
+	if (g_scrambleCount > 0) {
+		// We have at least one sample.
+		if (!isNaN(extremeAs)) g_histogram.minX = Math.min(Math.floor((sampleStats.min - 0.20 * sampleStats.range)*1000)/1000, extremeAs);
+		else g_histogram.minX = Math.floor((sampleStats.min - 0.20 * sampleStats.range)*1000)/1000;
+		if (!isNaN(extremeAs)) g_histogram.maxX = Math.max(Math.ceil((sampleStats.max + 0.20 * sampleStats.range)*1000)/1000, extremeAs);
+		else g_histogram.maxX = Math.ceil((sampleStats.max + 0.20 * sampleStats.range)*1000)/1000;
+		g_histogram.minY = 0;
+		// Now that we have set minX/maxX, redo histogram with these limits so we can figure out maxBinCount
+		sampleStats = getArrayStats(g_scrambleStats, g_scrambleCount, histogramChoice, g_histogram.binCount, g_histogram.minX, g_histogram.maxX);
+		g_histogram.maxY = 1.2 * sampleStats.maxBinCount;
+	} else {
+		// No samples yet
+		g_histogram.minX = 0;
+		g_histogram.maxX = 1;
+		g_histogram.minY = 0;
+		g_histogram.maxY = 10;
+	}
+	// Force histogram to always be at least 25 high... keeps it from jumping too much at beginning.
+	if (g_histogram.maxY < 25) {
+		g_histogram.maxY = 25;
+	}
+	// For first data point, will have minX = maxX. Set min/max X values so histogram looks reasonable.
+	if (g_scrambleCount == 1) {
+		g_histogram.minX -= 1;
+		g_histogram.maxX += 1;
+	}
+	// Force to tenths to improve look of axis labels.
+//	g_histogram.minX = Math.floor(g_histogram.minX * 10) / 10;
+//	g_histogram.maxX = Math.ceil(g_histogram.maxX * 10) / 10;
+	//if (!isNaN(extremeAs)) {
+		// Extend min/max if extremeAs is beyond either boundary
+	//	if (extremeAs < g_histogram.minX) {
+	//		g_histogram.minX = extremeAs;
+	//	}
+	//	if (extremeAs > g_histogram.maxX) {
+	//		g_histogram.maxX = extremeAs;
+	//	}
+	//}	
+};
+
+function setPlotScale(plot) {
+	// Set scaling factors, to go from chart to canvas.
+	if (plot.maxX > plot.minX) {
+		plot.chartToCanvasScaleX = plot.usableCanvasWidth / (plot.maxX - plot.minX);
+	} else {
+		plot.chartToCanvasScaleX = 1;
+	}
+	if (plot.maxY > plot.minY) {
+		plot.chartToCanvasScaleY = plot.usableCanvasHeight / (plot.maxY - plot.minY);
+	} else {
+		plot.chartToCanvasScaleY = 1;
+	}
+};
+
+function drawAxes(plot, ctx) {
+	// Draw x-axis and y-axis
+	// Note that it is important to use beginPath() and closePath(), otherwise later changes to strokeStyle
+	// (e.g. color changes) will apply to axis lines!
+	ctx.strokeStyle = "black"; 
+	ctx.beginPath();
+	ctx.moveTo(toCanvasX(plot, plot.minX),toCanvasY(plot, plot.minY));
+	ctx.lineTo(toCanvasX(plot, plot.maxX),toCanvasY(plot, plot.minY));
+	// stroke does the work of drawing the line, without this the user will not be able to see it.
+	ctx.stroke();
+	ctx.moveTo(toCanvasX(plot, plot.minX),toCanvasY(plot, plot.minY));
+	ctx.lineTo(toCanvasX(plot, plot.minX),toCanvasY(plot, plot.maxY));
+	ctx.stroke();
+	ctx.closePath();
+};
+
+function writeXAxisTitle(plot, ctx) {
+	// Add x-axis title
+	ctx.fillStyle = "black";
+	ctx.textAlign = "center";
+	ctx.fillText(plot.xTitle, toCanvasX(plot, plot.minX + (plot.maxX-plot.minX)/2.0),toCanvasY(plot, plot.minY) + plot.xTitleCanvasOffset);
+};
+
+function writeYAxisTitle(plot, ctx) {
+	// Add y-axis title -- more complex because the text is rotated.
+	ctx.fillStyle = "black";
+	ctx.save();
+	ctx.translate(toCanvasX(plot, plot.minX) + plot.yTitleCanvasOffset,toCanvasY(plot, plot.minY + (plot.maxY-plot.minY)/2.0));
+	ctx.rotate(-Math.PI/2);
+	ctx.textAlign = "center";
+	ctx.fillText(plot.yTitle, 0, 0);
+	ctx.restore();
+};
+
+function writeXAxisLabels(plot, ctx) {
+	ctx.fillStyle = "black";
+	ctx.textAlign = "center";
+	// Format so that we get have (roughly) xLabelCount-1 intervals along the x-axis
+	// (Label 1)(interval)(Label 2)...(Label xLabelCount). Force to nice-looking increments.
+	// It might not be exactly xLabelCount labels, because we use getBetweenLabels to compute a nice-looking (e.g. 10 rather than 11.3) interval between labels.
+	var labelInfo = getBetweenLabels(plot.minX, plot.maxX, plot.xLabelCount);
+	for (var x=labelInfo.labelStart; x <= plot.maxX; x += labelInfo.betweenLabels) {
+		ctx.fillText(x.toFixed(plot.xLabelDecimals).replace(".000000000".substring(0,plot.xLabelDecimals+1),""), 
+			toCanvasX(plot, x),toCanvasY(plot, plot.minY) + plot.xLabelCanvasOffset);
+	}
+};
+
+function writeYAxisLabels(plot, ctx) {
+var labelNum;
+var yBetweenLabels;
+var y;
+var labelY;
+var labelInfo;
+var yAxisCanvasX;
+var yLabelCanvasX;
+var labelYText;
+
+	// Compute canvas X for (left-hand) axis label.
+	yAxisCanvasX = toCanvasX(plot, plot.minX);
+	// Add in our offset for the label start.
+	yLabelCanvasX = yAxisCanvasX + plot.yLabelCanvasOffset;
+	// Set text style and alignment - use right align so text starts cleanly against (left-hand) axis label.
+	ctx.fillStyle = "black";
+	ctx.textAlign = "right";
+	// Format so that we get have (roughly) yLabelCount-1 intervals along the y-axis, e.g. bottom label on x-axis, top label at end of y-axis.
+	// (Label 1)(interval)(Label 2)...(Label yLabelCount). Force to nice-looking increments.
+	// It might not be exactly yLabelCount labels, because we use getBetweenLabels to compute a nice-looking (e.g. 10 rather than 11.3) interval between labels.
+	var labelInfo = getBetweenLabels(plot.minY, plot.maxY, plot.yLabelCount);
+
+	ctx.font = plot.font;
+	// Add y-axis labels.
+	for (y=labelInfo.labelStart; y < plot.maxY; y += labelInfo.betweenLabels) {
+		labelYText = y.toFixed(1).replace(".0","");
+		// Write the text.
+		ctx.fillText(labelYText, yLabelCanvasX, toCanvasY(plot, y));
+	}
+};
+
+//	var labelStart = Math.floor(betweenLabels*Math.ceil((Math.abs(min)/betweenLabels)));
+function getBetweenLabels(min, max, labelCount) {
+	// Compute exact y between labels.
+	var betweenLabels = (max - min)/(labelCount-1);
+	// To produce nice-looking numbers, e.g. 10, 20, 30 rather than 9.8, 18.6, etc:
+	// Compute log-base-10 of betweenLabels
+	var logBetween = Math.log(betweenLabels) / Math.log(10);
+	// Round down to closest integer. 
+	logBetween = Math.floor(logBetween);
+	// If we take 10 to the resulting power, this gives us a nice increment.
+	var yNiceIncrement = Math.pow(10,logBetween);
+	// Make betweenLabels a multiple of yNiceIncrement
+	if (betweenLabels < yNiceIncrement) {
+		// Force up to yNiceIncrement
+		betweenLabels = yNiceIncrement;
+	} else {
+		// Force down to a multiple of yNiceIncrement.
+		betweenLabels = yNiceIncrement * Math.floor(betweenLabels / yNiceIncrement);
+	}
+	var labelStart = 0;
+	if (min >= 0) {
+		// Want to find the next higher even multiple of betweenlabels that is bigger than min
+		labelStart = betweenLabels * Math.ceil((Math.abs(min)/betweenLabels));
+	} else {
+		// Want to find the next higher (less negative) even multiple of betweenLabels 
+		labelStart = -1 * betweenLabels * Math.floor((Math.abs(min)/betweenLabels));
+	}
+	return {
+		betweenLabels: betweenLabels,
+		labelStart: labelStart
+		}
+};
+
+function writeUpperLeftText(plot, ctx, row, text) {
+var prettyXOffset = 5; // Shift text to right a bit to keep it off y-axis.
+var prettyYOffset = 10; // Shift text down a bit to make it look nice.
+var rowYSize = 15; // Decent-looking size of row of text.
+	// Add text in upper left of plot
+	ctx.fillStyle = "black";
+	ctx.textAlign = "left";
+	ctx.fillText(text, toCanvasX(plot, plot.minX) + prettyXOffset,toCanvasY(plot, plot.maxY) + prettyYOffset + row * rowYSize);
+};
+
+//draw the left scatterplot
+function drawSamplePlot(plot, scrambleIndex, selectedObsIndex) {
+var canvas = $(plot.canvasName);  
+var ctx = canvas.getContext("2d");
+
+	for (i=0; i<g_numObs; i++) {
+		// if drawing selected observation, change color to highlight it.
+		if (i == selectedObsIndex) {
+			ctx.fillStyle = "red";
+		} else {
+			ctx.fillStyle = "black";
+		}
+		// fillRect(x,y,width,height)
+		// Shift to left and up by 1 pixel, to center the dots more closely on the observation. Makes things look better when
+		// we add the residual lines.
+		ctx.fillRect(toCanvasX(plot, g_obsX[i])-1,toCanvasY(plot, g_obsY[scrambleIndex[i]])-1,3,3);
+	}
+	if (g_scrambleCount > 0 && g_setPopulation){
+		for (i=0; i<g_sampleSize; i++){
+			ctx.fillStyle="blue";
+			ctx.fillRect(toCanvasX(plot, g_obsSampleX[i])-1,toCanvasY(plot, g_obsSampleY[i])-1,3,3);
+		}
+	}
+};
+
+//Draw the random sample from the population in the samples graph
+function drawPopSamplePlot(plot, scrambleIndex, selectedObsIndex) {
+var canvas = $(plot.canvasName);  
+var ctx = canvas.getContext("2d");
+
+	for (i=0; i<g_sampleSize; i++) {
+		// if drawing selected observation, change color to highlight it.
+	//	if (i == selectedObsIndex) {
+		//	ctx.fillStyle = "red";
+		//} else 
+		if (g_setPopulation) {
+			ctx.fillStyle = "blue";
+		} else		{
+			ctx.fillStyle = "black";
+		}
+		// fillRect(x,y,width,height)
+		// Shift to left and up by 1 pixel, to center the dots more closely on the observation. Makes things look better when
+		// we add the residual lines.
+		ctx.fillRect(toCanvasX(plot, g_obsSampleX[i])-1,toCanvasY(plot, g_obsSampleY[scrambleIndex[i]])-1,3,3);
+	}
+};
+
+// Depending on user choice, get type of statistic.
+function getHistogramChoice() {
+	if ($("scrambleShowSlope").checked) return("slope");
+	if ($("scrambleShowCorrelation").checked) return("correlation");
+	if ($("scrambleShowTRatio").checked) return("tRatio");
+	if ($("scrambleShowIntercept").checked) return("intercept");
+	// Nothing selected by user. Give a warning and display slope.
+	if (g_scrambleCount > 0 && $("showScrambleOptions").checked && g_beenhere == 0) {
+		alert("You need to select a statistic type. I'm picking slope for you.");
+		g_beenhere = 1;
+		$("scrambleShowSlope").checked = true;
+		return("slope");
+	}
+	//alert("Internal error.");
+	return("slope");
+};
+
+function doCountSamples() {
+	g_countSamples = true;
+	redraw();
+	// We *must* return false, otherwise hitting enter in the form reloads the page!
+	return false;
+};
+
+function drawHistogram() {
+var canvas = $("histogram");  
+var ctx = canvas.getContext("2d");
+var binCount = 0;
+//var countSamples = $("countSamples").checked;
+var countSamples = g_countSamples;
+var countInput = parseFloat($("countInput").value);
+var countOperator = $("countOperator").value.toUpperCase();
+var histogramChoice = getHistogramChoice();
+var tDensity = 0;
+var subBinCount = 10;
+var subBinWidth = 0;
+var subBinLeft = 0;
+var subBinRight = 0;
+var subBinMid = 0;
+var histColor = "";
+var densityColor = "";
+var noScrambleStats = getObsStats(g_noScrambleIndex);
+var noScrambleStat = 0;
+var bricksVersusRectangleCutoff = 100; // Number of samples below which we show bricks building up, and above which we show rectangles.
+
+	// Force min/max to be graph min/max, so we don't get tiny little bins on first few samples
+	var sampleStats = getArrayStats(g_scrambleStats, g_scrambleCount, histogramChoice, g_histogram.binCount, g_histogram.minX, g_histogram.maxX);
+	var hist = sampleStats.hist;
+	if (countSamples) {
+		// Confirm numeric countInput
+		if (isNaN(countInput)) {
+			// Force off counting
+			countSamples = false;
+		} else {
+			// Draw vertical line at countInput
+			ctx.strokeStyle = "red";
+			ctx.lineWidth = 1;
+			ctx.beginPath();
+			ctx.moveTo(toCanvasX(g_histogram, countInput), toCanvasY(g_histogram,0));
+			ctx.lineTo(toCanvasX(g_histogram, countInput), toCanvasY(g_histogram,g_histogram.maxY));
+			ctx.stroke();
+			if (countOperator == "BEYOND")	{
+				var lowerCount = 0;
+				var upperCount = 0;
+				if (sampleStats.avg < .01) {  //assuming a mean of zero
+						lowerCount = -1*Math.abs(countInput);
+						upperCount = Math.abs(countInput);
+					} else {  //null distribution does not have a mean of zero
+						lowerCount = sampleStats.avg - Math.abs(sampleStats.avg - countInput);
+						upperCount = sampleStats.avg + Math.abs(sampleStats.avg - countInput);
+						}	
+				ctx.beginPath();
+				ctx.moveTo(toCanvasX(g_histogram, lowerCount), toCanvasY(g_histogram,0));
+				ctx.lineTo(toCanvasX(g_histogram, lowerCount), toCanvasY(g_histogram,g_histogram.maxY));
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.moveTo(toCanvasX(g_histogram, upperCount), toCanvasY(g_histogram,0));
+				ctx.lineTo(toCanvasX(g_histogram, upperCount), toCanvasY(g_histogram,g_histogram.maxY));
+				ctx.stroke();
+			}
+		}
+	}
+	writeUpperLeftText(g_histogram, ctx, 0, t_mean[g_language]  + sampleStats.avg.toFixed(3));
+	writeUpperLeftText(g_histogram, ctx, 1, t_SD[g_language] + sampleStats.sampleStdDev.toFixed(3));
+	if (g_setPopulation)	writeUpperLeftText(g_histogram, ctx, 2, t_totalSamplesText[g_language] + g_scrambleCount);
+	else writeUpperLeftText(g_histogram, ctx, 2, t_totalShufflesText[g_language] + g_scrambleCount);
+	if ($("scrambleShowSlope").checked) {
+		// Histogram for slope.
+		noScrambleStat = noScrambleStats.regSlope;
+	}
+	if ($("scrambleShowCorrelation").checked) {
+		// Histogram for correlation.
+		noScrambleStat = noScrambleStats.correlation;
+	}
+	if ($("scrambleShowTRatio").checked) {
+		// Histogram for t-ratio.
+		noScrambleStat = noScrambleStats.slopet;
+	}
+	for(bin=0; bin < hist.length; bin++) {
+		binCount = hist[bin].count;
+		
+		// For histogram points, start with default of silver, then change to red if we are counting and the point fits the count criteria.
+		ctx.fillStyle = getHistFillStyle(countSamples, countOperator, hist[bin].midPoint, countInput, "silver", "red"); 
+		// Create a rectangle for the histogram, this is the new code to make histograms instead of dotplots
+		ctx.beginPath();
+		// rect(x,y,width,height)
+		ctx.rect(toCanvasX(g_histogram, hist[bin].left),
+			toCanvasY(g_histogram, 0),
+			toCanvasX(g_histogram, sampleStats.binWidth) - toCanvasX(g_histogram, 0),
+			toCanvasY(g_histogram, binCount) - toCanvasY(g_histogram, 0));
+		// Fill the interior
+		ctx.fill();
+		// Draw left vertical line and right vertical line, to separate the bars.
+		ctx.lineWidth = 1;
+		ctx.strokeStyle = "grey";
+		ctx.beginPath();
+		ctx.moveTo(toCanvasX(g_histogram, hist[bin].left), toCanvasY(g_histogram, 0));
+		ctx.lineTo(toCanvasX(g_histogram, hist[bin].left), toCanvasY(g_histogram, binCount));
+		ctx.stroke();
+		ctx.closePath();
+		ctx.beginPath();
+		ctx.lineTo(toCanvasX(g_histogram, hist[bin].right), toCanvasY(g_histogram, binCount));
+		ctx.lineTo(toCanvasX(g_histogram, hist[bin].right), toCanvasY(g_histogram, 0));
+		ctx.stroke();
+		ctx.closePath();
+		ctx.beginPath();
+		ctx.lineTo(toCanvasX(g_histogram, hist[bin].left), toCanvasY(g_histogram, binCount));
+		ctx.lineTo(toCanvasX(g_histogram, hist[bin].right), toCanvasY(g_histogram, binCount));
+		ctx.stroke();
+		ctx.closePath();
+
+		if (g_scrambleCount <= bricksVersusRectangleCutoff) {
+			// Draw horizontal white lines at top of each "brick" so we get appearance of bricks piling up as samples are added.
+			for (var i=0; i < binCount; i++) {
+				ctx.lineWidth = 1;
+				ctx.strokeStyle = "grey";
+				ctx.beginPath();
+				ctx.moveTo(toCanvasX(g_histogram, hist[bin].left), toCanvasY(g_histogram, i+1));
+				ctx.lineTo(toCanvasX(g_histogram, hist[bin].right), toCanvasY(g_histogram, i+1));
+				ctx.stroke();
+				ctx.closePath();				
+			}
+		}
+		var showPoint = false;
+		var histStatChoice = getHistStatChoice();
+		for (var i=0; i < binCount; i++) {
+			var index = hist[bin].indexArray[i];
+			// Save chart X and Y coordinates
+			g_scrambleStats[index].histogramChartX = hist[bin].midPoint;
+			g_scrambleStats[index].histogramChartY = i+.5;
+
+			var originalValue = g_scrambleStats[index][histStatChoice];
+			var dotStyle = getHistFillStyle(countSamples, countOperator, originalValue, countInput, "silver", "red"); 
+			// draw the dot.
+			ctx.fillStyle = dotStyle;
+			ctx.beginPath();
+			ctx.rect(toCanvasX(g_histogram, hist[bin].left),
+				toCanvasY(g_histogram, i),
+				toCanvasX(g_histogram, hist[bin].right) - toCanvasX(g_histogram,hist[bin].left),
+				toCanvasY(g_histogram, 1)-toCanvasY(g_histogram, 0)) ;
+			ctx.fill();
+			ctx.closePath();
+			
+			//show last or selected sample in blue
+			// If displaying highlighted point, then change color and size, but just for this point
+			// Defaults.
+			ctx.fillStyle = "silver";
+			if (index == g_scrambleStatsSelectedIndex) {
+				// Displaying selected point, change color and size to highlight it
+				ctx.fillStyle = "blue";
+				showPoint = true;
+			}
+			if (g_scrambleStatsSelectedIndex == null && index == g_scrambleStats.length - 1) {
+				// There is no selected point, and this is the most recent shuffle, change color and size to highlight it.
+				ctx.fillStyle = "blue";
+				showPoint = true;
+			}
+			// fillRect(x,y,width,height)
+			if (showPoint) {
+				ctx.fillRect(toCanvasX(g_histogram, hist[bin].left),toCanvasY(g_histogram, i),
+				toCanvasX(g_histogram, hist[bin].right)-toCanvasX(g_histogram, hist[bin].left),
+				toCanvasY(g_histogram, 1)-toCanvasY(g_histogram, 0)) ;
+			}
+
+			
+		}
+
+		
+		
+		if ($("scrambleShowTRatio").checked && $("overlayTDistribution").checked && g_numObs > 2) {
+			// Draw theoretical t density, as a bar, behind the dots for the histogram
+			// Question - can we approximate density for this histogram bar by taking cdf(right edge of bar) - cdf(left edge of bar).
+			// Then can we scale it by multiplying by g_scrambleCount?
+			// To make theoretical graph smoother, break each histogram bin into 10 sub-bins and loop through them.
+			// Need to multiply by subBinCount for proper scaling.
+			subBinWidth = (hist[bin].right - hist[bin].left) / subBinCount;
+			// For density curve, start with default of light blue, then change to light red if we are counting and the point fits the count criteria.
+			ctx.fillStyle = getHistFillStyle(countSamples, countOperator, hist[bin].midPoint, countInput, "lightblue", "#FFDEAD"); 
+			for(subBin=0; subBin < subBinCount; subBin++) {
+				subBinLeft = hist[bin].left + subBin * subBinWidth;
+				subBinRight = hist[bin].left + (subBin+1) * subBinWidth;
+				subBinMid = hist[bin].left + (subBin+0.5) * subBinWidth;
+				tDensity = getTCDF(g_numObs-2, subBinRight) - getTCDF(g_numObs-2, subBinLeft);
+				// Scale so density matches histogram.
+				tDensity *= g_scrambleCount * subBinCount;
+				// 
+				ctx.fillRect(toCanvasX(g_histogram, subBinLeft),toCanvasY(g_histogram, 0),
+					toCanvasX(g_histogram, subBinRight) - toCanvasX(g_histogram, subBinLeft),
+					toCanvasY(g_histogram, tDensity) - toCanvasY(g_histogram, 0));
+			}
+		}
+		// For histogram points, start with default of black, then change to red if we are counting and the point fits the count criteria.
+//		ctx.fillStyle = getHistFillStyle(countSamples, countOperator, hist[bin].midPoint, countInput, "black", "red"); 
+//		for (i=1; i <= binCount; i++) {
+			// fillRect(x,y,width,height)
+			// Shift to left and up by 1 pixel, to center the dots more closely on the histogram count.
+//			ctx.fillRect(toCanvasX(g_histogram, hist[bin].midPoint)-1,toCanvasY(g_histogram, i)-1,3,3);
+//		}
+	}
+	if (countSamples && g_scrambleCount > 0) {
+		// Compute counts and fraction, put that into countSamplesOutput paragraph.
+		var stat = 0;
+		var count = 0;
+		var fraction = 0;
+		// Now we look at original data (rather than just histogram midpoints) to come up with counts.
+		for(i=0; i<g_scrambleCount; i++) {
+			if ($("scrambleShowSlope").checked) {
+				stat = g_scrambleStats[i].slope;
+			}
+			if ($("scrambleShowCorrelation").checked) {
+				stat = g_scrambleStats[i].correlation;
+			}
+			if ($("scrambleShowTRatio").checked) {
+				stat = g_scrambleStats[i].tRatio;
+			}
+			if ($("scrambleShowIntercept").checked) {
+				stat = g_scrambleStats[i].intercept;
+			}
+
+			switch (countOperator) {
+				case "GREATER THAN":
+					if (stat >= countInput) {
+						count++;
+					}
+					break;
+				case "LESS THAN":
+					if (stat <= countInput) {
+						count++;
+					}
+					break;
+				case "BEYOND":
+					if (Math.abs(sampleStats.avg) < .1) {  //assuming a mean of zero
+						if (stat >= Math.abs(countInput) || stat <= -1 * Math.abs(countInput)) count++;
+					} else {  //null distribution does not have a mean of zero
+						var lowerCount = sampleStats.avg - Math.abs(sampleStats.avg - countInput);
+						var upperCount = sampleStats.avg + Math.abs(sampleStats.avg - countInput);
+						if (stat > upperCount || stat <= lowerCount) {
+							count++;
+						}
+					}
+					break;
+				default:
+					break;
+			}			
+		}
+		fraction = count / g_scrambleCount;
+		$("countSamplesOutput").innerHTML = "<font color=\"red\">" + t_countLabel[g_language] + " = " + count + "/" + g_scrambleCount + " (" + fraction.toFixed(4)+")";
+		$("countSamplesNotes").innerHTML = "";
+		// If user specific an input value for counting that is not close to the statistic for the original input data, give a warning
+		// Ensure that input they entered is within 0.01 of statistic for original input data
+		if (Math.abs(countInput - noScrambleStat) > 0.01 && !g_setPopulation) {
+			$("countSamplesNotes").innerHTML = "<font color=\"red\">"
+				+ t_warning[g_language];
+				+ "</font>";
+		}
+	} else {
+		$("countSamplesOutput").innerHTML = "";
+		$("countSamplesNotes").innerHTML = "";
+	}
+};
+
+function getHistFillStyle(countSamples, countOperator, midPoint, countInput, defaultStyle, highlightStyle) {
+var returnStyle = defaultStyle;
+var histogramChoice = getHistogramChoice();
+var sampleStats = getArrayStats(g_scrambleStats, g_scrambleCount, histogramChoice, g_histogram.binCount, g_histogram.minX, g_histogram.maxX);
+
+	// Decide if we should use highlight color or default color, based on the midPoint we are plotting and the count conditions.
+	if (countSamples) {
+		switch (countOperator) {
+			case "GREATER THAN":
+				if (midPoint >= countInput) {
+					returnStyle = highlightStyle;
+				}
+				break;
+			case "LESS THAN":
+				if (midPoint <= countInput) {
+					returnStyle = highlightStyle;
+				}
+				break;
+			case "BEYOND":
+				var upperCount = 0;
+				var lowerCount = 0;
+				if (Math.abs(sampleStats.avg) < .01) {  //assuming a mean of zero
+					 upperCount = Math.abs(countInput);
+					 lowerCount = -1 * Math.abs(countInput);
+				} else {  //null distribution does not have a mean of zero
+					 lowerCount = sampleStats.avg - Math.abs(sampleStats.avg - countInput);
+					 upperCount = sampleStats.avg + Math.abs(sampleStats.avg - countInput);
+				}
+				if (midPoint >= upperCount || midPoint <= lowerCount) {
+					returnStyle = highlightStyle;
+				}
+				break;
+			default:
+				break;
+		}
+	}
+	return(returnStyle);
+};
+
+function LogGamma(Z) {
+	var S=1+76.18009173/Z-86.50532033/(Z+1)+24.01409822/(Z+2)-1.231739516/(Z+3)+.00120858003/(Z+4)-.00000536382/(Z+5);
+	var LG= (Z-.5)*Math.log(Z+4.5)-(Z+4.5)+Math.log(S*2.50662827465);
+	return LG
+};
+
+function Betinc(X,A,B) {
+	var A0=0;
+	var B0=1;
+	var A1=1;
+	var B1=1;
+	var M9=0;
+	var A2=0;
+	var C9;
+	while (Math.abs((A1-A2)/A1)>.00001) {
+		A2=A1;
+		C9=-(A+M9)*(A+B+M9)*X/(A+2*M9)/(A+2*M9+1);
+		A0=A1+C9*A0;
+		B0=B1+C9*B0;
+		M9=M9+1;
+		C9=M9*(B-M9)*X/(A+2*M9-1)/(A+2*M9);
+		A1=A0+C9*A1;
+		B1=B0+C9*B1;
+		A0=A0/B1;
+		B0=B0/B1;
+		A1=A1/B1;
+		B1=1;
+	}
+	return A1/A
+};
+
+function getTCDF(df, X) {
+tcdf = 0;
+	if (df<=0) {
+		alert("getTCDF: Degrees of freedom (" + df + ") must be positive.")
+	} else {
+		A=df/2;
+		S=A+.5;
+		Z=df/(df+X*X);
+		BT=Math.exp(LogGamma(S)-LogGamma(.5)-LogGamma(A)+A*Math.log(Z)+.5*Math.log(1-Z));
+		if (Z<(A+1)/(S+2)) {
+			betacdf=BT*Betinc(Z,A,.5)
+		} else {
+			betacdf=1-BT*Betinc(1-Z,.5,A)
+		}
+		if (X<0) {
+			tcdf=betacdf/2
+		} else {
+			tcdf=1-betacdf/2
+		}
+	}
+	tcdf=Math.round(tcdf*100000)/100000;
+	return(tcdf);
+};
+
+// Use binary search to find inverse t
+function inverseT(p, n) {
+	// Start with some reasonably large delta, note that first loop will always result in delta being cut in half, since lastDirection init to 0.
+	var delta = 2;
+	var t = 0;
+	var currentcdf = 0;
+	var lastDirection = 0;
+	var direction = 0;
+	while(delta > 1e-6) {
+		currentcdf = getTCDF(n, t);
+		if (Math.abs(currentcdf - p) < 1e-6) break;
+		if (currentcdf >= p) {
+			// too high, move left
+			direction = -1;
+		} else {
+			// too low, move right
+			direction = 1;
+		}
+		t += delta * direction;
+		if (direction != lastDirection) {
+			// Shifting direction, so cut delta in half
+			delta /= 2.0;
+			lastDirection = direction;
+		}
+	}
+	return t;
+}
+
+function drawOriginalRegressionLine(plot){
+var canvas = $(plot.canvasName);  
+var ctx = canvas.getContext("2d");
+
+	ctx.strokeStyle = "red";
+	ctx.beginPath();
+	ctx.moveTo(toCanvasX(plot, plot.minX),toCanvasY(plot, g_origSampleIntercept + plot.minX * g_origSampleSlope));
+	ctx.lineTo(toCanvasX(plot, plot.maxX),toCanvasY(plot, g_origSampleIntercept + plot.maxX * g_origSampleSlope));
+	ctx.stroke();
+	ctx.closePath();
+
+}
+function drawPopulationRegressionLine(plot) {
+var canvas = $(plot.canvasName);  
+var ctx = canvas.getContext("2d");
+
+	// Get stats for original data.
+	var stats = getObsStats(g_noScrambleIndex);
+	// Draw original regression line in red
+	if (g_setPopulation) ctx.strokeStyle = "#00FFFF";
+	else ctx.strokeStyle = "red";
+	ctx.beginPath();
+	ctx.moveTo(toCanvasX(plot, plot.minX),toCanvasY(plot, stats.regIntercept + plot.minX * stats.regSlope));
+	ctx.lineTo(toCanvasX(plot, plot.maxX),toCanvasY(plot, stats.regIntercept + plot.maxX * stats.regSlope));
+	ctx.stroke();
+	ctx.closePath();
+	// stroke does the work of drawing the line, without this the user will not be able to see it.
+//	if (g_OrigIntercept != stats.regIntercept) {
+//		ctx.strokeStyle = "purple";
+//		ctx.beginPath();
+//		ctx.moveTo(toCanvasX(plot, plot.minX), toCanvasY(plot, g_OrigIntercept + plot.minX * g_OrigSlope));
+//		ctx.lineTo(toCanvasX(plot, plot.maxX),toCanvasY(plot, g_OrigIntercept + plot.maxX * g_OrigSlope));
+//		ctx.stroke();
+//		ctx.closePath(); 
+//	}
+	
+};
+
+function drawScrambleRegressionLines(plot) {
+var canvas = $(plot.canvasName);  
+var ctx = canvas.getContext("2d");
+
+	// Draw scramble regression lines (for all scrambles to date) in blue
+	for(i=0; i<g_scrambleCount; i++) {
+		if (g_scrambleStatsSelectedIndex == null && i == g_scrambleStats.length - 1) ctx.strokeStyle="blue";
+		//else 	if (i == g_scrambleStatsSelectedIndex)	ctx.strokeStyle = "blue";
+		else ctx.strokeStyle="silver";
+	
+		ctx.beginPath();
+		ctx.moveTo(toCanvasX(plot, plot.minX),toCanvasY(plot, g_scrambleStats[i].intercept + plot.minX * g_scrambleStats[i].slope));
+		ctx.lineTo(toCanvasX(plot, plot.maxX),toCanvasY(plot, g_scrambleStats[i].intercept + plot.maxX * g_scrambleStats[i].slope));
+		// stroke does the work of drawing the line, without this the user will not be able to see it.
+		ctx.stroke();
+		ctx.closePath();
+		
+	}
+	if (g_scrambleStatsSelectedIndex != null){
+		ctx.strokeStyle="blue";
+		ctx.beginPath();
+		ctx.moveTo(toCanvasX(plot, plot.minX),toCanvasY(plot, g_scrambleStats[g_scrambleStatsSelectedIndex].intercept + plot.minX * g_scrambleStats[g_scrambleStatsSelectedIndex].slope));
+		ctx.lineTo(toCanvasX(plot, plot.maxX),toCanvasY(plot, g_scrambleStats[g_scrambleStatsSelectedIndex].intercept + plot.maxX * g_scrambleStats[g_scrambleStatsSelectedIndex].slope));
+		ctx.stroke();
+		ctx.closePath();
+	}
+
+};
+
+function drawRegressionResiduals(plot, scrambleIndex) {
+var canvas = $(plot.canvasName);  
+var ctx = canvas.getContext("2d");
+var stats = getObsStats(scrambleIndex);
+
+	ctx.strokeStyle = "red";
+	ctx.beginPath();
+	for (i=0; i<g_numObs; i++) {
+		ctx.moveTo(toCanvasX(plot, g_obsX[i]),toCanvasY(plot, g_obsY[scrambleIndex[i]]));
+		ctx.lineTo(toCanvasX(plot, g_obsX[i]),toCanvasY(plot, stats.regIntercept + g_obsX[i] * stats.regSlope));
+		ctx.stroke();
+	}
+	ctx.closePath();
+};
+
+function drawRegressionSquaredResiduals(plot, scrambleIndex) {
+var canvas = $(plot.canvasName);  
+var ctx = canvas.getContext("2d");
+var stats = getObsStats(scrambleIndex);
+var yCanvasDelta = 0;
+
+	ctx.strokeStyle = "red";
+	ctx.beginPath();
+	for (i=0; i<g_numObs; i++) {
+		ctx.moveTo(toCanvasX(plot, g_obsX[i]),toCanvasY(plot, g_obsY[scrambleIndex[i]]));
+		ctx.lineTo(toCanvasX(plot, g_obsX[i]),toCanvasY(plot, stats.regIntercept + g_obsX[i] * stats.regSlope));
+		// Note: We are cheating here a bit. If we add the residual (stats.regressionResiduals[i])) to g_obsX[i], and the y-axis and x-axis
+		// have different scales (which they almost certainly will), then we won't get a square, we'll get a rectangle. The rectangle will have
+		// the right size, but it still looks odd. 
+		// So instead, we add the equivalent number of pixels that is represented by the residual to the canvas equivalent of g_obsX[i], so
+		// that we see a square on the graph.
+		// Also, make all the squares build to the right of the observation, by using Math.abs so yCanvasDelta is always positive.
+		yCanvasDelta = Math.abs(toCanvasY(plot, stats.regIntercept + g_obsX[i] * stats.regSlope) - toCanvasY(plot, g_obsY[scrambleIndex[i]]));
+		ctx.lineTo(toCanvasX(plot, g_obsX[i]) + yCanvasDelta,toCanvasY(plot, stats.regIntercept + g_obsX[i] * stats.regSlope));
+		ctx.lineTo(toCanvasX(plot, g_obsX[i]) + yCanvasDelta,toCanvasY(plot, g_obsY[scrambleIndex[i]]));
+		ctx.lineTo(toCanvasX(plot, g_obsX[i]),toCanvasY(plot, g_obsY[scrambleIndex[i]]));
+		ctx.stroke();
+	}
+	ctx.closePath();
+};
+
+function drawMovableLine() {
+var canvas = $("samplePlot");  
+var ctx = canvas.getContext("2d");
+var stats = getObsStats(g_scrambleIndex);
+
+	ctx.strokeStyle = "blue";
+	ctx.beginPath();
+	ctx.moveTo(toCanvasX(g_samplePlot, g_samplePlot.minX),toCanvasY(g_samplePlot, g_movableLineIntercept + g_samplePlot.minX * g_movableLineSlope));
+	ctx.lineTo(toCanvasX(g_samplePlot, g_samplePlot.maxX),toCanvasY(g_samplePlot, g_movableLineIntercept + g_samplePlot.maxX * g_movableLineSlope));
+	// stroke does the work of drawing the line, without this the user will not be able to see it.
+	ctx.stroke();
+	ctx.closePath();
+	// Add dots at beginning, middle, and end of movable line. Visual indicator that user can grab
+	// these points to move the line.
+	ctx.fillStyle = "green";
+	// Left end. Adding -2 to the canvas Y centers the dot on the line.
+	ctx.fillRect(toCanvasX(g_samplePlot, g_samplePlot.minX),-2+toCanvasY(g_samplePlot, g_movableLineIntercept + g_samplePlot.minX * g_movableLineSlope),4,4);
+	// Middle. Adding -2 to the canvas Y centers the dot on the line.
+	ctx.fillRect(toCanvasX(g_samplePlot, g_samplePlot.minX+(g_samplePlot.maxX-g_samplePlot.minX)/2.0),-2+toCanvasY(g_samplePlot, g_movableLineIntercept + (g_samplePlot.minX+(g_samplePlot.maxX-g_samplePlot.minX)/2.0) * g_movableLineSlope),7,7);
+	// Right end.
+	ctx.fillRect(-4+toCanvasX(g_samplePlot, g_samplePlot.maxX),-2+toCanvasY(g_samplePlot, g_movableLineIntercept + g_samplePlot.maxX * g_movableLineSlope),4,4);	
+};
+
+function drawMovableResiduals() {
+var canvas = $("samplePlot");  
+var ctx = canvas.getContext("2d");
+var stats = getObsStats(g_scrambleIndex);
+
+	ctx.strokeStyle = "blue";
+	ctx.beginPath();
+	for (i=0; i<g_numObs; i++) {
+		ctx.moveTo(toCanvasX(g_samplePlot, g_obsX[i]),toCanvasY(g_samplePlot, g_obsY[g_scrambleIndex[i]]));
+		ctx.lineTo(toCanvasX(g_samplePlot, g_obsX[i]),toCanvasY(g_samplePlot, g_movableLineIntercept + g_obsX[i] * g_movableLineSlope));
+		ctx.stroke();
+	}
+	ctx.closePath();
+};
+
+function drawMovableSquaredResiduals() {
+var canvas = $("samplePlot");  
+var ctx = canvas.getContext("2d");
+var stats = getObsStats(g_scrambleIndex);
+var yCanvasDelta = 0;
+
+	ctx.strokeStyle = "blue";
+	ctx.beginPath();
+	for (i=0; i<g_numObs; i++) {
+		ctx.moveTo(toCanvasX(g_samplePlot, g_obsX[i]),toCanvasY(g_samplePlot, g_obsY[g_scrambleIndex[i]]));
+		ctx.lineTo(toCanvasX(g_samplePlot, g_obsX[i]),toCanvasY(g_samplePlot, g_movableLineIntercept + g_obsX[i] * g_movableLineSlope));
+		// Note: We are cheating here a bit. If we add the residual (stats.movableResiduals[i])) to g_obsX[i], and the y-axis and x-axis
+		// have different scales (which they almost certainly will), then we won't get a square, we'll get a rectangle. The rectangle will have
+		// the right size, but it still looks odd. 
+		// So instead, we add the equivalent number of pixels that is represented by the residual to the canvas equivalent of g_obsX[i], so
+		// that we see a square on the graph.
+		// Also, make all the squares build to the right of the observation, by using Math.abs so yCanvasDelta is always positive.
+		yCanvasDelta = Math.abs(toCanvasY(g_samplePlot, g_movableLineIntercept + g_obsX[i] * g_movableLineSlope) - toCanvasY(g_samplePlot, g_obsY[g_scrambleIndex[i]]));
+		ctx.lineTo(toCanvasX(g_samplePlot, g_obsX[i]) + yCanvasDelta,toCanvasY(g_samplePlot, g_movableLineIntercept + g_obsX[i] * g_movableLineSlope));
+		ctx.lineTo(toCanvasX(g_samplePlot, g_obsX[i]) + yCanvasDelta,toCanvasY(g_samplePlot, g_obsY[g_scrambleIndex[i]]));
+		ctx.lineTo(toCanvasX(g_samplePlot, g_obsX[i]),toCanvasY(g_samplePlot, g_obsY[g_scrambleIndex[i]]));
+		ctx.stroke();
+	}
+	ctx.closePath();
+};
+
+// Clear the samplePlot and redraw axes
+function resetSamplePlot(plot) {
+ var canvas = $(plot.canvasName);  
+ var ctx = canvas.getContext("2d");  
+
+ // clear the entire canvas.
+ ctx.clearRect(0, 0, canvas.width, canvas.height);
+ // Create axes etc.
+ samplePlotSetup(plot);
+};
+
+// Clear the histogram and redraw axes
+function resetHistogram() {
+ var canvas = $("histogram");  
+ var ctx = canvas.getContext("2d");  
+
+ // clear the entire canvas.
+ ctx.clearRect(0, 0, canvas.width, canvas.height);
+ // Create axes etc.
+ histogramSetup();
+};
+
+// Revert to last-used data (e.g. undo any point moves or deletions/additions).
+function revertData() {
+	$("dataText").value = g_lastUseDataText;
+	g_numPopObs = 0;
+	useData("notPop");
+};
+
+function clearShuffles(){
+	// Data not scrambled.
+	g_isScrambled = false;
+	g_scrambleCount = 0;
+	// Redraw the chart.
+	redraw();
+};
+
+// Change assumption about input data -- is it X (explanatory), Y (response) or Y,X?
+// QUIRK: It's important that the button be defined as <input type="button" value="(x,y")...> rather than <button>(x,y>)</button>!
+// Otherwise, we can't use .value to change the button text.
+function swapInputOrder() {
+	// Make the swap
+	g_inputIsExplanatoryResponse = !g_inputIsExplanatoryResponse;
+	// Update button label
+	if (g_inputIsExplanatoryResponse) {
+		$("btnSwapInputOrder").value = t_evrv[g_language];
+	} else {
+		$("btnSwapInputOrder").value = t_rvev[g_language];
+	}
+	$("btnSwapInputOrder").innerHTML = $("btnSwapInputOrder").value
+	// Use data under this new assumption
+	useData("notPop");
+};
+
+// General normal random variate
+function genNormal(mean, stdDev) {
+	if (mean == undefined) mean = 0.0;
+	if (stdDev == undefined) stdDev = 1.0;
+	// Generate using polar method (rejection).
+	var V1, V2, S;
+	do {
+		var U1 = Math.random();
+		var U2 = Math.random();
+		V1 = 2 * U1 - 1;
+		V2 = 2 * U2 - 1;
+		S = V1 * V1 + V2 * V2;
+	} while (S > 1);
+	X = Math.sqrt(-2 * Math.log(S) / S) * V1;
+	X = mean + stdDev * X;
+	// We are actually generating two random variates but throwing second one away - if this is too slow
+	// we should figure out how to use both.
+	// Y = Math.sqrt(-2 * Math.log(S) / S) * V2;
+	// Y = mean + stdDev * Y ;
+	return X;
+}
+
+// Create a finite population of 1000 observations to sample from.  
+// Use Population Inputs to set parameters
+function createPopulation(){
+
+var popSlope = parseFloat($("popSlope").value,10);
+var popIntercept = parseFloat($("popIntercept").value,10);
+
+var popXMean = parseFloat($("popXMean").value,10);
+var popXStd = parseFloat($("popXStd").value,10);
+var popSigma = parseFloat($("popSigma").value,10);
+
+/*
+popIntercept = sampleToPopStats.avgY;
+$("popIntercept").value = popIntercept;
+popXMean = sampleToPopStats.sumX/g_numObs;
+$("popXMean").value = popXMean;
+popXStd = Math.sqrt((sampleToPopStats.sumXSq - Math.pow(sampleToPopStats.sumX,2)/g_numObs)/(g_numObs-1));
+$("popXStd").value = popXStd;
+popSigma = Math.sqrt(sampleToPopStats.regressionSSE/(g_numObs-2));
+$("popSigma").value = popSigma;
+*/
+
+
+var xRand = 0;
+var yRand = 0;
+g_numPopObs = 0;
+//g_obsX[0] = "<i>x</i>";
+//g_obsY[0] = "y";
+
+g_obsX[0] = g_samplePlot.xTitle;
+g_obsY[0] = g_samplePlot.yTitle;
+//g_samplePlot.xTitle = "<i>x</i>";
+//g_samplePlot.yTitle = "y";
+/* Generate the observations in this population. */
+/* How population is created will depend on resamplePopulation setting */
+
+//var origX = g_obsX;
+//var origY = g_obsY;
+	//g_lastUseDataText = newDataText;
+//revertData();
+
+//Adjust intercept to match nonzero slope (doesn't currently changet pop intercept disply
+popIntercept=g_firstPopYMean - popSlope*(g_firstPopXMean).toFixed(3);
+$("popIntercept").value = popIntercept.toFixed(3);
+var firstPopXMean = g_firstPopXMean;
+var firstPopXStd = g_firstPopXStd;
+
+
+ g_populationSize = 20000;
+var resamplePop = $("resamplePopulation").value;
+	switch (resamplePop) {
+			case "Observedx":	
+				 /*reads in the current x values */
+				var fixx = new Array();
+				for (k = 0; k < g_origObsX.length; k++){
+					fixx[k] = g_origObsX[k];
+					//allows you to modify population from original data to explore change in null distribution
+					fixx[k] = fixx[k]*popXStd/firstPopXStd - popXStd/firstPopXStd*firstPopXMean + firstPopXMean + (popXMean - firstPopXMean);
+				}
+				for (k = 0; k < g_origObsX.length; k++){
+					for (i=0; i< g_populationSize/g_origObsX.length; i++) {
+						yRand = popSlope * fixx[k] + popIntercept + genNormal(0,1)*popSigma;
+						/* Add to array underlying chart - first entry in x:xRand is the name, the second is the variable. */	
+						g_obsX[g_numPopObs] = fixx[k];
+						g_obsY[g_numPopObs] = yRand;
+						g_numPopObs++;		
+					}
+				}
+			break;
+		case "Bivariate":
+			for (i=0; i< g_populationSize; i++) {
+					xRand = genNormal(0,1)*popXStd + popXMean;
+					yRand = popSlope * xRand + popIntercept + genNormal(0,1)*popSigma;
+				/* Add to array underlying chart - first entry in x:xRand is the name, the second is the variable. */	
+					g_obsX[g_numPopObs] = xRand;
+					g_obsY[g_numPopObs] = yRand;
+					g_numPopObs++;		
+				}
+			break;
+		case "Uniformx":
+			for (i=0; i< g_populationSize; i++) {
+					xRand = Math.random()*(popXMean + popXStd*3.2) + (popXMean - popXStd*3.2)
+					yRand = popSlope * xRand + popIntercept + genNormal(0,1)*popSigma;
+				/* Add to array underlying chart - first entry in x:xRand is the name, the second is the variable. */	
+					g_obsX[g_numPopObs] = xRand;
+					g_obsY[g_numPopObs] = yRand;
+					g_numPopObs++;		
+				}
+			break;
+			default:
+					break;
+			}
+
+				
+
+	var dataTextObj = $("dataText");
+//	var newDataText = "x"+ "\t" + "y" + "\n";
+	var newDataText = g_samplePlot.xTitle + "\t" + g_samplePlot.yTitle + "\n";
+	for (i=0; i<g_populationSize; i++) {
+		newDataText += g_obsX[i].toFixed(2).replace(".00","") + "\t" + g_obsY[i].toFixed(2).replace(".00","") + "\n";
+	}    
+	dataTextObj.value = newDataText;
+//	g_lastUseDataText = newDataText;
+	if (!g_noaxischanges) {
+	g_samplePlot.minX = Math.min.apply(null,g_obsX);
+	g_samplePlot.maxX = Math.max.apply(null,g_obsX);
+	g_samplePlot.minY = Math.min.apply(null,g_obsY);
+	g_samplePlot.minY = Math.max.apply(null,g_obsY);
+	}
+resetSamplePlot(g_samplePlot);	
+if (g_setPopulation) {
+	g_saveInputExplanatoryResponse = g_inputIsExplanatoryResponse;
+	g_inputIsExplanatoryResponse = true;
+	}
+useData("Pop");
+$("cellRescale").style.display="";
+//	redraw();
+//	updateDataText()
+}
+
+// Process data specified in dataText.
+function useData(whichcall) {
+	// Get the input string
+	var dataTextObj = $("dataText");
+	var dataText = dataTextObj.value;
+	// Save it for "revert"
+	if (!g_setPopulation){
+		g_lastDataText="";
+		g_lastUseDataText = dataText;
+		}
+	//Split by newlines into rows
+	var dataRows = dataText.split(/\n+/);
+
+	// Split by whitespaces
+	var dataWords = dataText.split(/\s+/);
+
+	//check for words as first 2 entries
+	var haveHeader = false;
+	var startIndex = 0;
+	if (isNaN(parseFloat(dataWords[0])) && isNaN(parseFloat(dataWords[1]))){
+		haveHeader = true;
+		startIndex = 1;
+	}
+	// Use first two words as x-axis and y-axis titles.
+	if ((g_inputIsExplanatoryResponse && haveHeader) || whichcall=="Pop") {	
+			g_samplePlot.xTitle = dataWords[0];
+			g_samplePlot.yTitle = dataWords[1];
+			g_simSamplePlot.xTitle = dataWords[0];
+			g_simSamplePlot.yTitle = dataWords[1];
+	}	else if (haveHeader ) {
+			g_samplePlot.xTitle = dataWords[1];
+			g_samplePlot.yTitle = dataWords[0];
+			g_simSamplePlot.xTitle = dataWords[1];
+			g_simSamplePlot.yTitle = dataWords[0];
+	}	else {
+			g_samplePlot.xTitle = t_explanatory[g_language];
+			g_samplePlot.yTitle = t_response[g_language];
+			g_simSamplePlot.xTitle = "x";
+			g_simSamplePlot.yTitle = "y";
+			}
+	
+		
+	//}
+	// Read in the remaining data, store in g_obsX and g_obsY.
+	var obsX, obsY;
+	var badData = false;
+	// Reset to zero observations.
+	g_numObs = 0;
+	g_scrambleIndex = new Array();
+	g_noScrambleIndex = new Array();
+	for (i=startIndex; i < dataRows.length && !badData; i += 1) {
+		dataWords = dataRows[i].trim().split(/\s+/);
+
+		// Check for empty entry... if empty, delete it and loop back around
+		// This should solve two problems:
+		// 1: If there is an accidental blank row in the input data, it will keep the following data from getting out of x/y synch.
+		// 2: If there are extra blank rows after the input data, it will keep these rows from being read as zero data values.
+//		if (dataWords[i].trim() == "") {
+//			// Get rid of the empty element.
+//			dataWords.splice(i,1);
+//}
+//		} else {
+			// Make sure there's two more data elements, an x and y pair.
+//			if (i < dataWords.length-1) {
+		if (dataWords.length == 1 && dataWords == "") {}
+		else	if (dataWords.length > 0) {
+				 obsX = parseFloat(dataWords[0]);
+				 obsY = parseFloat(dataWords[1]);
+				 if (isNaN(obsX) || isNaN(obsY)) {//obsX = 0;
+				    alertBadInput(i);
+					badData = true;
+				} 		
+				 // Store the pair
+				if (whichcall=="notPop") {
+					g_origObsX[g_numObs] = obsX;
+					g_origObsY[g_numObs] = obsY;
+				//	g_scrambleIndex[g_numObs] = g_numObs;
+				 // Create g_noScrambleIndex so we can use it whenever we want original data.
+				 //g_noScrambleIndex[g_numObs] = g_numObs;
+				 //g_numObs++;
+				}
+				if (!badData){
+					 if (g_inputIsExplanatoryResponse) {
+						// Input data is x,y
+						 g_obsX[g_numObs] = obsX;
+						 g_obsY[g_numObs] = obsY;
+					} else {
+						// Input data is y,x
+						 g_obsX[g_numObs] = obsY;
+						 g_obsY[g_numObs] = obsX;
+					}
+				
+				 // Initially, data is not scrambled, so set g_scrambleIndex[i] = i;
+				 g_scrambleIndex[g_numObs] = g_numObs;
+				 // Create g_noScrambleIndex so we can use it whenever we want original data.
+				 g_noScrambleIndex[g_numObs] = g_numObs;
+				 g_numObs++;
+				 }
+				 else badData = false;
+				 
+			}
+//		}
+	}
+					
+
+	// Clear selection
+	g_selectedObsIndex = null;
+	// Disable movable line, because it may have been enabled previously and may not even be in right spot.
+	$("showMovableLine").checked = false;
+	// Data not scrambled.
+	g_isScrambled = false;
+	g_scrambleCount = 0;
+	// Show number of observations.
+	if (g_setPopulation) $("cellNumObs").innerHTML = "N = " + g_numPopObs;
+	else {
+		$("cellNumObs").innerHTML = "n = " + g_numObs; 
+		$("cellRescale").style.display="none";
+	}
+	// Redraw the chart.
+	g_keepOriginal = false;
+
+	redraw();
+};
+
+function alertBadInput(row) {
+	alert("You appear to have a missing value in row" + row +"; that row will be ignored");
+}
+
+// Update data text to reflect current observation values.
+function updateDataText() {
+var dataTextObj = $("dataText");
+var newDataText = g_samplePlot.xTitle + "\t" + g_samplePlot.yTitle + "\n";
+
+	// Append the data values.
+	// Round to two decimal places, replace ".00" with "".
+	for (i=0; i<g_numObs; i++) {
+		newDataText += g_obsX[i].toFixed(2).replace(".00","") + "\t" + g_obsY[i].toFixed(2).replace(".00","") + "\n";
+	}
+	// Update data text.
+	// Note: Setting dataTextObj.innerHTML didn't always work in chrome -- it would work until user edited data in textarea and clicked on "use my data",
+	// after that setting innerHTML didn't modify the contents of the text area. Not sure why.
+	dataTextObj.value = newDataText;
+};
+
+// Update scrambled data text to reflect current observation values.
+function updateScrambledDataText() {
+var scrambledDataTextObj = $("scrambledDataText");
+var newScrambledDataText = "";
+
+	if (g_isScrambled && g_scrambleCount > 0) {
+		newScrambledDataText = g_samplePlot.xTitle + "\t" + g_samplePlot.yTitle + "\n";
+		// Append the data values.
+		// Round to two decimal places, replace ".00" with "".
+		
+	if (g_setPopulation){
+		for (i=0; i<g_sampleSize; i++){
+				newScrambledDataText += g_obsSampleX[i].toFixed(2).replace(".00","") + "\t"  + g_obsSampleY[i].toFixed(2).replace(".00","") + "\n";
+				}
+	}	else {
+		for (i=0; i<g_numObs; i++) {
+				// Use g_scrambleIndex[] to get scrambled Y values.
+				newScrambledDataText += g_obsX[i].toFixed(2).replace(".00","") + "\t" + g_obsY[g_scrambleIndex[i]].toFixed(2).replace(".00","") + "\n";
+			}
+	}
+	// Default shuffle title
+	if (g_language == 1) var shuffleTitle = t_shuffle[1] + " " + t_MostRecent[1];
+	else var shuffleTitle = t_MostRecent[g_language] + " " + t_shuffle[g_language];
+	if (g_setPopulation) {
+		if (g_language ==1) shuffleTitle = t_sample[1] + " " + t_MostRecent[1];
+		else shuffleTitle = t_MostRecent[g_language] + " " + t_sample[g_language];
+		}
+	if (g_scrambleStatsSelectedIndex != null) {
+			// Displaying a particular shuffle, to match selected point
+			if (g_setPopulation) shuffleTitle = t_sample[g_language] + " " + (g_scrambleStatsSelectedIndex+1) + ":";
+			else shuffleTitle = t_shuffle[g_language] + " " + (g_scrambleStatsSelectedIndex+1) + ":";
+			$("shuffleTitle").innerHTML = "<font color=\"blue\">" + shuffleTitle + "</font>";
+	}
+	else $("shuffleTitle").innerHTML = "<font color=\"blue\">" + shuffleTitle + "</font>";
+
+
+	}
+	// Update data text.
+	// Note: Setting dataTextObj.innerHTML didn't always work in chrome -- it would work until user edited data in textarea and clicked on "use my data",
+	// after that setting innerHTML didn't modify the contents of the text area. Not sure why.
+	scrambledDataTextObj.value = newScrambledDataText;
+};
+
+
+// Add an observation
+function addObservation() {
+var obsX = parseFloat($("addX").value);
+var obsY = parseFloat($("addY").value);
+
+	if (isNaN(obsX)) {
+		alert("Please enter a number for x.");
+		return;
+	}
+	if (isNaN(obsY)) {
+		alert("Please enter a number for y.");
+		return;
+	}
+	// Store the pair
+	g_obsX[g_numObs] = obsX;
+	g_obsY[g_numObs] = obsY;
+	g_scrambleIndex[g_numObs] = g_numObs;
+	g_numObs++;
+	// Update data list
+	updateDataText();
+	// Blank out x/y input boxes
+	$("addX").value = "";
+	$("addY").value = "";
+	// Update chart etc
+	useData("NotPop");
+	redraw();
+};
+
+// Delete selected observation
+function deleteObservation() {
+	// Just checking
+	if (g_selectedObsIndex == null) {
+		return;
+	}
+	if (g_selectedObsIndex < 0 || g_selectedObsIndex > g_numObs) {
+		return;
+	}
+	// Can't delete a point after scrambling - the scrambled data point is likely based on two original data rows.
+	if (g_isScrambled) {
+		return;
+	}
+	// Remove the observation -- remove one element at selected index.
+	g_obsX.splice(g_selectedObsIndex,1);
+	g_obsY.splice(g_selectedObsIndex,1);
+	g_numObs--;
+	// Since we are assuming we only get here if not scrambling, don't need to rebuild g_scrambleIndex, because it must currently
+	// be true that g_scrambleIndex[i] = i. For clarity, just truncate it to the new g_numObs;
+	g_scrambleIndex.length = g_numObs;
+	// Clear selection
+	g_selectedObsIndex = null;
+	// Update data textbox to reflect change in data.
+	updateDataText();
+	// Redraw the chart.
+	redraw();	
+};
+
+function sampleData() {
+var unsampled = new Array();
+var shuffledIndexCount = 0;
+var numberOfSamples = parseInt($("numberOfScrambles").value, 10);
+g_sampleSize = parseInt($("sampleSize").value, 10);
+g_sampleIndex = new Array();
+g_populationSize = g_numPopObs;
+	
+	if (isNaN(numberOfSamples) || numberOfSamples < 1) {
+		alert("Please enter a number >= 1 for the 'number of samples'.");
+		return;
+	}
+
+	for (sample=0; sample < numberOfSamples; sample++){
+		g_obsSampleX=new Array();
+		g_obsSampleY = new Array();
+		for (i=0; i < g_populationSize; i++) {
+				unsampled[i] = i;
+		}
+		for(sampleIndexCount=0; sampleIndexCount < g_sampleSize; sampleIndexCount++) {
+			randomIndex = Math.floor(Math.random() * (unsampled.length));
+				if (randomIndex >= unsampled.length) {
+					randomIndex = unsampled.length-1;
+				}
+			// Pull out unsampled[randomIndex], and assign to g_sampleIndex[sampleIndexCount];
+			g_sampleIndex[sampleIndexCount] = unsampled[randomIndex];
+			g_obsSampleX[sampleIndexCount] = g_obsX[g_sampleIndex[sampleIndexCount]];
+			g_obsSampleY[sampleIndexCount] = g_obsY[g_sampleIndex[sampleIndexCount]];
+			
+			// Delete unsampled[randomIndex]
+			unsampled.splice(randomIndex,1);
+		}
+		// Save statistics, then increment global sample count.
+		var stats = getSampleObsStats(g_sampleIndex);
+		g_scrambleStats[g_scrambleCount] = {
+			correlation: stats.correlation, 
+			intercept: stats.regIntercept, 
+			slope: stats.regSlope,
+			tRatio: stats.slopet,
+			scrambleIndex: sampleIndexCount
+			};
+		g_scrambleCount++;
+	}
+
+	g_isScrambled = true;
+	redraw();
+	// We *must* return false, otherwise hitting enter in the form reloads the page!
+		
+};
+
+
+function getShuffleIndex(numPoints) { ///copied over from ANOVA 12/26
+var randomIndex = 0;
+
+	// Create new g_shuffleIndex array for each sample... we want to save these in g_shuffleStats[] for later reference,
+	// and unless we create a new array for each sample, we aren't saving the individual observations from each sample, just
+	// one copy of (probably) the last sample.
+	var shuffleIndex = new Array();
+	// To shuffle, we draw from the original sequence 0, ... g_numObs-1 without replacement, and build up g_shuffleIndex.
+	// Initialize unshuffled[i] = i. We will be destroying unshuffled[] as we withdraw observations.
+	var unshuffled = new Array();
+	for (var i=0; i < g_numObs; i++) {
+		unshuffled[i] = i;
+	}
+	// Draw without replacement until unshuffled[] is empty.
+	var shuffledIndexCount = 0;
+	while (unshuffled.length > 0) {
+		// Choose a random index 0, ..., unshuffled.length-1
+		// Math.random() is supposed to return value in [0,1), e.g. never equal to 1. But what if it does return 1 due to a bug in some 
+		// browser's implementatation? We need to protect against that.
+		// Math.random() is [0,1).
+		// Math.random() * (unshuffled.length) is [0, unshuffled.length)
+		// Math.floor(Math.random() * (unshuffled.length)) is [0, unshuffled.length-1] and is integer.
+		randomIndex = Math.floor(Math.random() * (unshuffled.length));
+		// But just in case Math.random() has a bug and returns 1, coerce:
+		if (randomIndex >= unshuffled.length) {
+			randomIndex = unshuffled.length-1;
+		}
+		// Pull out unshuffled[randomIndex], and assign to g_shuffleIndex[shuffledIndexCount];
+		shuffleIndex[shuffledIndexCount] = unshuffled[randomIndex];
+		// Delete unshuffled[randomIndex]
+		unshuffled.splice(randomIndex,1);
+		// Increment 
+		shuffledIndexCount++;
+	}
+	return(shuffleIndex);
+}
+
+function scrambleData() {
+//setPopulation();
+if (g_setPopulation) {
+	sampleData();	
+	}
+else{
+
+var unscrambled = new Array();
+var randomIndex = 0;
+var scrambledIndexCount = 0;
+var numberOfScrambles = parseInt($("numberOfScrambles").value,10);
+	
+	g_showOriginalRegressionOutput = false;
+	// Save current g_shuffleIndex for use in animation.
+	var lastScrambleIndex = g_scrambleIndex;
+
+	if (isNaN(numberOfScrambles) || numberOfScrambles < 1) {
+		alert("Please enter a number >= 1 for the 'number of scrambles'.");
+		return;
+	}
+	for (scramble=1; scramble <= numberOfScrambles; scramble++) {
+		g_scrambleIndex = getShuffleIndex(g_numObs);
+		var stats = getObsStats(g_scrambleIndex);
+		g_scrambleStats[g_scrambleCount] = {
+			correlation: stats.correlation, 
+			intercept: stats.regIntercept, 
+			slope: stats.regSlope,
+			tRatio: stats.slopet,
+			scrambleIndex: g_scrambleIndex
+			};
+		g_scrambleCount++;
+	}
+	g_isScrambled = true;
+	redraw();
+}
+	// We *must* return false, otherwise hitting enter in the form reloads the page!
+	return false;	
+
+};
+
+// User changed "show scramble options"
+function changeShowScrambleOptions()
+{
+	// If we previously were scrambling, then call useData() to reset back to original data.
+	if (g_scrambleCount > 0) {
+		useData("NotPop");
+	}
+	$("shuffleTitle").style.display="none";
+	$("shuffleTitle").innerHTML="";
+	
+	g_scrambleStatsSelectedIndex = null;
+	// Always redraw
+	redraw();
+};
+function changeScrambleShow() {
+	// If choice of statistic for histogram is changed, then blank out the "count samples" input. Otherwise,
+	// we may be displaying a count for an input that isn't appropriate for the current choice of statistic.
+	$("countInput").value = "";
+	$("cellTheoPvalueOutput").style.display = "none";
+	
+	g_noaxischanges = false;
+	// Redraw the output
+	redraw();
+};
+
+function showDescriptive(){
+	redraw();
+}
+function setPopulation() {
+var sampleToPopStats = getObsStats(g_noScrambleIndex);
+
+	if ($("setPopulation").checked) {
+		g_scrambleCount = 0;
+		g_scrambleStats = new Array();
+		g_setPopulation = true;
+		g_numPopObs = 0;
+		$("cellNumObs").innerHTML = "N = " + g_numPopObs;
+		$("labelShowScrambleOptions").innerHTML = t_sampling[g_language];
+		$("labelNumberOfScrambles").innerHTML = t_numSamples[g_language];
+		$("labelSampleSize").innerHTML = t_sampleSize[g_language];
+		$("showOrigLabel").style.display="";
+		$("showOrigLabel").innerHTML = t_showOrig[g_language];
+		$("resamplePopulationCell").style.display = "";
+		$("showMoveableLineBox").style.display= "none";
+		$("cellShowRegressionResiduals").style.display="none";
+		$("cellShowRegressionSquaredResiduals").style.display="none";
+		$("addremovecell").style.display="none";
+		$("moveobservationcell").style.display="none";
+
+		$("popIntercept").value = (sampleToPopStats.avgY - $("popSlope").value*sampleToPopStats.sumX/g_numObs).toFixed(3);
+		//sampleToPopStats.avgY.toFixed(3);
+		$("popXMean").value = (sampleToPopStats.sumX/g_numObs).toFixed(3);
+		$("popXStd").value = Math.sqrt((sampleToPopStats.sumXSq - Math.pow(sampleToPopStats.sumX,2)/g_numObs)/(g_numObs-1)).toFixed(3);
+		$("popSigma").value = Math.sqrt(sampleToPopStats.regressionSSE/(g_numObs-2)).toFixed(3);
+		g_origSampleSlope = sampleToPopStats.regSlope;
+		g_origSampleIntercept = sampleToPopStats.regIntercept;
+	//Want to know the mean and standard deviation of the original data
+g_firstPopXStd = Math.sqrt((sampleToPopStats.sumXSq - Math.pow(sampleToPopStats.sumX,2)/g_numObs)/(g_numObs-1));
+g_firstPopXMean = sampleToPopStats.sumX/g_numObs;
+g_firstPopYMean = sampleToPopStats.avgY;
+
+		}
+	else {
+		g_setPopulation = false;
+		g_inputIsExplanatoryResponse = g_saveInputExplanatoryResponse;
+		$("cellNumObs").innerHTML = "n = " + g_numObs;
+		$("labelShowScrambleOptions").innerHTML = t_shuffling[g_language];
+		$("labelNumberOfScrambles").innerHTML = t_numShuffles[g_language];
+		$("labelSampleSize").innerHTML = t_sampleSize[g_language];
+		$("showOrigLabel").style.display="none";
+		$("labelSampleSize").style.display="none";
+		$("resamplePopulationCell").style.display = "none";
+		$("showMoveableLineBox").style.display= "";
+		$("cellShowRegressionResiduals").style.display="";
+		$("cellShowRegressionSquaredResiduals").style.display="";
+		$("addremovecell").style.display="";
+		$("moveobservationcell").style.display="";
+		revertData();
+	}
+	redraw();
+}
+
+// Redraw all outputs.
+function redraw() {
+	
+	if (g_setPopulation) {
+		$("cellSetPopulation").style.display = "";
+		$("cellSampleData").style.display="none";
+		$("randomizationMethod").value = t_drawSamples[g_language];
+		}
+	else {
+		$("cellSetPopulation").style.display = "none";
+		$("cellSampleData").style.display="";
+		$("randomizationMethod").value = t_shuffleY[g_language];
+	}
+	if ($("showDescriptive").checked) $("descriptiveOutput").style.display="";
+	else $("descriptiveOutput").style.display="none";
+	var digit = 2;
+	// Get stats for (possibly scrambled) data.
+	if (g_setPopulation && g_scrambleCount > 0) {
+		if (g_numPopObs==0){
+			alert("you need to press Create Population button first");
+			return;
+		}
+		var popStats = getObsStats(g_noScrambleIndex);
+		var stats = getSampleObsStats(g_scrambleIndex);
+	}
+	else var stats = getObsStats(g_scrambleIndex);  
+	// Get original stats
+	var statsNoScramble = getObsStats(g_noScrambleIndex);
+	if (!g_keepOriginal) {
+		g_OrigSlope = statsNoScramble.regSlope;
+		g_OrigIntercept = statsNoScramble.regIntercept;
+	}
+	
+	// Reset the samplePlot and simSamplePlot, redraw with new labels.
+	resetSamplePlot(g_samplePlot);
+	resetSamplePlot(g_simSamplePlot);
+	
+	// For each explanatory level, draw percentage of each response outcome.
+	drawSamplePlot(g_samplePlot, g_noScrambleIndex, g_selectedObsIndex);
+	// Reset the histogram, redraw with new labels.
+	resetHistogram();
+	if (g_scrambleCount > 0) {
+		// Never highlight a selected point on simulated plot
+		if (g_setPopulation) drawPopSamplePlot(g_simSamplePlot, g_scrambleIndex, null);
+		else drawSamplePlot(g_simSamplePlot, g_scrambleIndex, null);
+		if ($("scrambleShowSlope").checked ||$("scrambleShowIntercept").checked  ) {
+			// Draw regression lines on simulated plot.
+			drawScrambleRegressionLines(g_simSamplePlot);
+			// Draw original regression line on simulated plot
+			if(g_setPopulation)	{
+				drawPopulationRegressionLine(g_simSamplePlot);
+				if($("showOriginalLine").checked) drawOriginalRegressionLine(g_simSamplePlot);
+			}
+			else if ($("showRegressionLine").checked) drawPopulationRegressionLine(g_simSamplePlot);
+		}
+	}
+	// Draw the histogram
+	drawHistogram();
+	// If data is scrambled, then disable Add input boxes and button and move checkbox.
+	if (g_isScrambled) {
+		$("addX").disabled = true;
+		$("addY").disabled = true;
+		$("btnAddObservation").disabled = true;
+		$("moveObservations").disabled = true;
+	} else {
+		$("addX").disabled = false;
+		$("addY").disabled = false;
+		$("btnAddObservation").disabled = false;
+		$("moveObservations").disabled = false;
+	}
+	// If point is selected, enable deletion, otherwise disable it.
+	if (g_selectedObsIndex != null) {
+		if (!g_isScrambled) {
+			// Only enable button if not scrambled... can't delete once we've scrambled because each point is based on two original data points.
+			$("btnDeleteObservation").disabled = false;
+		} else {
+			$("btnDeleteObservation").disabled = true;
+		}
+		// Compute residual for selected point
+		var residual = g_obsY[g_scrambleIndex[g_selectedObsIndex]] - (stats.regIntercept + g_obsX[g_selectedObsIndex] * stats.regSlope);
+		// Change text on button to identify point.
+		$("btnDeleteObservation").value = t_delete[g_language] + " (" + g_obsX[g_selectedObsIndex].toFixed(2).replace(".00","")
+		+ ", " + g_obsY[g_scrambleIndex[g_selectedObsIndex]].toFixed(2).replace(".00","")
+		+ ")";
+		$("observationResidual").innerHTML = "Residual=" + residual.toFixed(2).replace(".00","");
+	} else {
+		$("btnDeleteObservation").disabled = true;
+		// Reset label.
+		$("btnDeleteObservation").value = t_delete[g_language]; 
+		// Reset residual
+		$("observationResidual").innerHTML = "";
+	}
+	if ($("showDescriptive").checked && !g_setPopulation ){
+		$("descriptiveOutput").innerHTML = "x mean=" + stats.avgX.toFixed(2) + ", x SD=" + stats.SDX.toFixed(2) + "<br />y mean=" + stats.avgY.toFixed(2) + ", y SD=" + stats.SDY.toFixed(2);
+	
+	}
+	// Add movable line, if desired.
+	if ($("showMovableLine").checked) {
+		// Show cells that cannot be used unless movable line is shown.
+		$("cellShowMovableResiduals").style.display = "";
+		$("cellShowMovableSquaredResiduals").style.display = "";
+		// If no movable line, set to flat line at avgY.
+		if (g_movableLineIntercept == null || g_movableLineSlope == null) {
+			g_movableLineIntercept = stats.avgY;
+			g_movableLineSlope = 0;
+		}
+		// Recompute statistics.
+		if (!g_setPopulation) stats = getObsStats(g_scrambleIndex);
+		// Draw the movable line.
+		drawMovableLine();
+		if ($("showMovableResiduals").checked) {
+			drawMovableResiduals();
+			$("movableSAE").innerHTML ="SAE=" + stats.movableSAE.toFixed(2);
+		} else {
+			$("movableSAE").innerHTML = "";
+		}
+		if ($("showMovableSquaredResiduals").checked) {
+			drawMovableSquaredResiduals();
+			$("movableSSE").innerHTML ="SSE=" + stats.movableSSE.toFixed(2);
+		} else {
+			$("movableSSE").innerHTML = "";
+		}
+		// Show movable line equation.
+		$("movableLineEquation").innerHTML = g_samplePlot.yTitle + "^ = " + g_movableLineIntercept.toFixed(2).replace(".00","") + " + " + g_movableLineSlope.toFixed(2).replace(".00","") + " x " + g_samplePlot.xTitle;
+		// Uncheck and disable "move observations", don't want to move observations at all when showing movable line.
+		$("moveObservations").checked = false;
+		$("moveObservations").disabled = true;
+	} else {
+		// Hide cells that cannot be used unless movable line is shown.
+		$("cellShowMovableResiduals").style.display = "none";
+		$("cellShowMovableSquaredResiduals").style.display = "none";
+		// Clear movable line outputs.
+		$("movableLineEquation").innerHTML = "";
+		$("movableSSE").innerHTML = "";
+		$("movableSAE").innerHTML = "";
+		// Reset slope and intercept, so if user re-enables the movable line, it will start over again as a flat line at the average.
+		g_movableLineIntercept = null;
+		g_movableLineSlope = null;
+	}
+	// Add true regression line, if desired.
+	$("regressionLineEquation").style.display = "none";
+	$("simRegressionLineEquation").style.display = "none";
+	if ($("showRegressionLine").checked) {
+		 drawPopulationRegressionLine(g_samplePlot);
+		//else drawOriginalRegressionLine(g_samplePlot);
+		// Output original
+		var intDigit = 2;
+		var slopeDigit =2;
+		if (Math.abs(statsNoScramble.regIntercept) < 1) intDigit = 4;
+		if (Math.abs(statsNoScramble.regSlope) < 1 && !g_setPopulation) slopeDigit = 4;
+		if (Math.abs(statsNoScramble.regSlope) < .05 && g_setPopulation) statsNoScramble.regSlope = 0;
+		
+		
+		var originalEquation = "<I>" + g_samplePlot.yTitle + "</I>" 
+			+ "^ = " + statsNoScramble.regIntercept.toFixed(intDigit).replace(".000","") 
+			+ " + " + statsNoScramble.regSlope.toFixed(slopeDigit).replace(".000","") 
+			+ " x " + "<I>" + g_samplePlot.xTitle + "</I>" ;
+		if (isNaN(statsNoScramble.regIntercept)) originalEquation = "<i>equation undefined</i>";
+		$("regressionLineEquation").style.display = "";
+		$("regressionLineEquation").innerHTML = originalEquation;
+		if (Math.abs(stats.regSlope) < .01) stats.regSlope = 0;
+		
+		if (g_scrambleCount > 0) {			
+			var currentEquation = "<I>" + g_samplePlot.yTitle + "</i>"
+				+ "^ = " + stats.regIntercept.toFixed(intDigit).replace(".00","") 
+				+ " + " + stats.regSlope.toFixed(intDigit).replace(".00","") 
+				+ " x <i>" + g_samplePlot.xTitle + "</i>";
+	
+			// Output current
+			$("simRegressionLineEquation").style.display = "";
+ 			if (g_language==1) var regline = t_regline[1] + " " + t_MostRecent[1];
+			else var regline = t_MostRecent[g_language] + " " + t_regline[g_language];
+			$("simRegressionLineEquation").innerHTML = 
+				"<font color=\"blue\">"
+//				+ "Most Recent " + t_shuffled[x=(g_setPopulation ? 1:0)] + " Regression Line"
+				+ regline
+				+ "</br>"
+				+ currentEquation
+				+ "</font>";			
+		}
+		// Show cells that cannot be used unless regression line is shown.
+		if (!g_setPopulation){
+			$("cellShowRegressionResiduals").style.display = "";
+			$("cellShowRegressionSquaredResiduals").style.display = "";
+		}
+		if ($("showRegressionResiduals").checked) {
+			drawRegressionResiduals(g_samplePlot, g_noScrambleIndex);
+			if (isNaN(statsNoScramble.regressionSAE)) $("regressionSAE").innerHTML ="<i>SAE undefined</i>";
+			else $("regressionSAE").innerHTML ="SAE=" + statsNoScramble.regressionSAE.toFixed(2);
+		} else {
+			$("regressionSAE").innerHTML = "";
+		}
+		if ($("showRegressionSquaredResiduals").checked) {
+			drawRegressionSquaredResiduals(g_samplePlot, g_noScrambleIndex);
+			if (isNaN(statsNoScramble.regressionSAE)) $("regressionSSE").innerHTML ="<i>SSE undefined</i>";
+			else $("regressionSSE").innerHTML ="SSE=" + statsNoScramble.regressionSSE.toFixed(2);
+		} else {
+			$("regressionSSE").innerHTML = "";
+		}
+	} else {
+		// Hide cells that cannot be used unless regression line is shown.
+		$("cellShowRegressionResiduals").style.display = "none";
+		$("cellShowRegressionSquaredResiduals").style.display = "none";
+		// Clear regression outputs.
+		$("regressionLineEquation").innerHTML = "";
+		$("regressionSSE").innerHTML = "";
+		$("regressionSAE").innerHTML = "";
+	}
+	if (g_setPopulation) var simlabel = t_sampled[g_language];
+	else var simlabel = t_shuffled[g_language];
+	//Show correlation if checked
+	$("cellCorrelation").style.display="none";
+	$("cellSimCorrelation").style.display="none";
+	if ($("showCorrelation").checked) {
+		$("cellCorrelation").style.display="";
+		var currentCorrelation = " <i>r</i> =" + stats.correlation.toFixed(3);
+		var originalCorrelation = "<i>r</i> =" + statsNoScramble.correlation.toFixed(3);
+		if (isNaN(statsNoScramble.correlation) || statsNoScramble.correlation > 1) originalCorrelation = "<i>r = undefined</i>";
+
+		// Output original
+		$("cellCorrelation").innerHTML = originalCorrelation;
+		if (g_scrambleCount > 0) {
+			// Output current
+			$("cellSimCorrelation").style.display="";
+			$("cellSimCorrelation").innerHTML = 
+				"<font color=\"blue\">" + simlabel + " "
+				+ currentCorrelation;
+				+ "</font>";
+		}
+	}
+	//Show R-squared if checked
+	$("cellRSquared").style.display="none";
+	$("cellSimRSquared").style.display="none";
+	if ($("showRSquared").checked) {
+		// Show original
+		$("cellRSquared").style.display="";
+		if (isNaN(statsNoScramble.correlation) || statsNoScramble.correlation > 1) $("cellRSquared").innerHTML="<i>r<sup>2</sup> = undefined</i>" ;
+		else $("cellRSquared").innerHTML="<i>r</i><sup>2</sup> =" + statsNoScramble.rsquared.toFixed(1) + "%";
+		if (g_scrambleCount > 0) {
+			// Show current
+			$("cellSimRSquared").style.display="";
+			$("cellSimRSquared").innerHTML="<font color=\"blue\">" + simlabel + " <i>r</i><sup>2</sup> =" + stats.rsquared.toFixed(1) + "%</font>";
+		}
+	}
+	$("cellS").style.display="none";
+	$("cellSimS").style.display="none";
+	if ($("showS").checked){
+		$("cellS").style.display="";
+		if (isNaN(statsNoScramble.correlation) || statsNoScramble.correlation > 1) $("cellS").innerHTML="<i>s = undefined</i>" ;
+		else $("cellS").innerHTML="<i>s</i> =" + statsNoScramble.regressionSE.toFixed(2);
+		if (g_scrambleCount > 0) {
+			// Show current
+			$("cellSimS").style.display="";
+			$("cellSimS").innerHTML="<font color=\"blue\">" + simlabel + " <i>s</i> =" + stats.regressionSE.toFixed(2) + "</font>";
+		}
+	}
+	//Show regression outputs if checked
+	$("cellRegressionOutput").style.display="none";
+	//$("descriptiveOutput").style.display="none";
+	$("cellSlopeCI").style.display="none";
+	$("regSlopeCIOutput").style.display="none";
+	$("cellSimRegressionOutput").style.display="none";
+	$("cellOriginalLine").style.display="none";
+	$("cellOriginalLineBox").style.display="none";
+
+	
+	if ($("showRegressionOutput").checked ) {
+		if (!g_setPopulation) $("cellSlopeCI").style.display="";
+		// Show original
+		if (!g_setPopulation) writeRegressionOutput("", "", statsNoScramble);
+		if (g_scrambleCount > 0) {
+			// Show current
+			writeRegressionOutput("Sim", "blue", stats);
+		}
+	
+	if ($("showRegSlopeCI").checked) {
+		$("regSlopeCIOutput").style.display="";
+		
+		var multiplier = inverseT(.975, g_numObs-2);
+		var lower = statsNoScramble.regSlope - multiplier*statsNoScramble.slopeSE;
+		var upper = statsNoScramble.regSlope + multiplier*statsNoScramble.slopeSE;
+		var df = g_numObs-2;
+//		$("Notes").innerHTML = "lower =" + lower.toFixed(2)+ "upper" + upper.toFixed(3) + "obs=" + df;
+		if (Math.abs(lower)< 1 || Math.abs(upper)< 1) digit = 4;
+		else digit=2;
+		$("regSlopeCIOutput").innerHTML = "(" + lower.toFixed(digit) + " , " + upper.toFixed(digit)  + "), df = " +df ;
+		if(isNaN(statsNoScramble.slopeSE)) $("regSlopeCIOutput").innerHTML = "<i> undefined </i>";
+	}
+	
+	}	
+	updateScrambledDataText();
+	if (g_hideShuffle) {
+		// All shuffle inputs and outputs should be hidden entirely.
+		$("cellShowScrambleOptions").style.display = "none";
+	} else {
+		$("cellShowScrambleOptions").style.display = "";
+
+	}
+	$("cellSampleSize").style.display="none";
+
+	if ($("showScrambleOptions").checked && !g_hideShuffle) {
+		if (g_setPopulation) {
+			$("cellSampleSize").style.display="";
+			$("cellOriginalLineBox").style.display="";
+			$("cellOriginalLine").style.display="";
+			var digit = 2;
+			if (Math.abs(g_origSampleSlope)<1) digit = 4;
+			if ($("showOriginalLine").checked) $("cellOriginalLine").innerHTML = "<font color=\"red\"><i>" + g_samplePlot.yTitle + "</i>^=" + g_origSampleIntercept.toFixed(2) + "+ " + g_origSampleSlope.toFixed(digit) + "x<i>" + g_samplePlot.xTitle +"</i> </font>" ;
+			else $("cellOriginalLine").style.display="none";
+			$("cellShuffleCountSamplesLabel").innerHTML = "Count Samples";
+			//$("cellRegressionOutput").innerHTML = "<i>regression undefined</i>";
+//			$("cellNumshowScrambleOptionsberOfScrambles").innerHTML="Number of Samples";
+		}
+	else 	$("cellShuffleCountSamplesLabel").innerHTML = t_count[g_language] + " " + t_shuffle[g_language] + "s";
+
+	$("cellNumberOfScrambles").style.display="";
+	$("shuffleShowTableLabel").innerHTML = t_table[g_language];
+	$("shuffleShowPlotLabel").innerHTML = t_plot[g_language];
+	$("t_countButton").value=t_countButton[g_language];
+	$("t_overlayt").innerHTML = t_overlayt[g_language];
+	$("lessThan").innerHTML = t_lessThan[g_language];
+	$("greaterThan").innerHTML = t_greaterThan[g_language];
+	$("beyond").innerHTML = t_beyond[g_language];
+	
+	$("slopeText").innerHTML = t_slope[g_language];
+	$("tstatisticText").innerHTML = t_tstatistic[g_language];
+	$("correlationText").innerHTML = t_correlation[g_language];
+	$("interceptText").innerHTML = t_intercept[g_language];
+
+		$("cellScrambleData").style.display="";
+		$("cellScrambledDataText").style.display="";
+		$("shuffleTitle").style.display="";
+		$("cellScrambleShow").style.display="";
+		$("cellScrambleHistogram").style.display="";
+		$("cellScrambleCountSamples").style.display="";
+		if($("scrambleShowTRatio").checked) $("cellOverlayTDistribution").style.display="";
+		else $("cellOverlayTDistribution").style.display="none";
+		$("countSamplesOutput").style.display="";
+		$("countSamplesNotes").style.display="";
+		if ($("scrambleShowTable").checked) {
+			$("cellScrambledDataText").style.display="";
+		} else {
+			$("cellScrambledDataText").style.display="none";
+		}
+		if ($("scrambleShowPlot").checked) {
+			$("simSamplePlot").style.display="";
+		} else {
+			$("simSamplePlot").style.display="none";
+		}
+		//Show theoretical p-value if checked
+		if ($("overlayTDistribution").checked && $("scrambleShowTRatio").checked){
+			$("cellTheoPvalueOutput").style.display="";
+			var countInput = parseFloat($("countInput").value);
+			var countOperator = $("countOperator").value.toUpperCase();
+			var tPvalue = 0;
+			switch (countOperator) {
+				case "GREATER THAN":
+					{
+					tPvalue=StudT(countInput, g_numObs-2)/2.0;	
+					}
+					break;
+				case "LESS THAN":
+					{
+					tPvalue = StudT(countInput, g_numObs-2)/2.0;
+					}
+					break;
+				case "BEYOND":
+					{
+					tPvalue = 2*(StudT(Math.abs(countInput),g_numObs-2)/2.0);
+					}
+					break;
+				default:
+					break;
+			}
+			if(!isNaN(tPvalue)) $("cellTheoPvalueOutput").innerHTML="<font color=\"orange\">" + t_theory[g_language] +"=" + tPvalue.toFixed(4) + "</font>";
+		} else {
+			$("cellTheoPvalueOutput").style.display="none";
+			$("cellTheoPvalueOutput").innerHTML="";
+			
+		}
+	} else {
+		$("cellTheoPvalueOutput").style.display="none";
+		$("cellNumberOfScrambles").style.display="none";
+		$("cellScrambleData").style.display="none";
+		$("shuffleTitle").style.display="none";
+		$("cellScrambledDataText").style.display="none";
+		$("cellScrambleShow").style.display="none";
+		$("cellScrambleHistogram").style.display="none";
+		$("cellScrambleCountSamples").style.display="none";
+		$("cellOverlayTDistribution").style.display="none";
+		$("countSamplesOutput").style.display="none";
+		$("countSamplesNotes").style.display="none";
+		$("simSamplePlot").style.display="none";		
+	}
+};
+
+function reset() {
+	// Reset sample count (seems like we don't want to keep prior samples if data changes... if we do, then remove this line).
+	g_scrambleCount = 0;
+	// Recreate sample stats array, some of our other code relies on its built-in length, so if we don't recreate it, we might use some old data.
+//	g_lastShuffleStats = null;
+	g_sampleStats = new Array();
+	// Recreate sample data array
+	g_obsSampleX = new Array();
+	g_obsSampleY = new Array();
+	g_isScrambled = false;
+	g_scrambleStatsSelectedIndex = null;
+	// Blank out count samples input
+	$("countInput").value = "";
+	// Redraw everything
+	redraw();
+}
+
+function changePopInputs(){
+g_noaxischanges = true;
+
+}
+function changeInputs() {
+	// Just update our global variables from user inputs and then redraw.
+	// In this way, if user is showing exact distribution and changes the parameters, the exact distribution will get redrawn.
+
+	var sampleSize= parseFloat($("sampleSize").value);
+
+	// Reset history if important changes made to inputs.
+	if (sampleSize != g_sampleSize ) {
+		// Save last data that we plotted, so we can plot it in light grey shifted a bit from latest data.
+		//g_savedShuffleStats = g_lastShuffleStats;
+		//g_prevSampleSize = g_sampleSize;
+		// Earlier observations are not valid any more, reset before starting.
+		reset();
+	}
+	// Save inputs
+	g_sampleSize = sampleSize;
+	// Success
+	redraw();	
+}
+
+function writeRegressionOutput(simPrefix, fontColor, stats) {
+var fontPrefix = "";
+var fontSuffix = "";
+var digit = 2;
+if (Math.abs(stats.regSlope)<1) digit = 4;
+
+
+if (isNaN(stats.regSlope )) {
+	$("cellRegressionOutput").style.display="";
+	$("cellRegressionOutput").innerHTML = "<i>regression undefined</i>";
+	}
+else  {
+	if (fontColor != "") {
+		fontPrefix = "<font color=\"" + fontColor + "\">";
+		fontSuffix = "</font>";
+	}
+	$("cell" + simPrefix + "RegressionOutput").style.display="";
+	$("cell" + simPrefix + "regressionOutputSlope").innerHTML = fontPrefix + g_samplePlot.xTitle + fontSuffix;
+	$("cell" + simPrefix + "slope").innerHTML = fontPrefix + stats.regSlope.toFixed(digit) + fontSuffix;
+	$("cell" + simPrefix + "slopese").innerHTML = fontPrefix + stats.slopeSE.toFixed(digit) + fontSuffix;
+	$("cell" + simPrefix + "slopet").innerHTML = fontPrefix + stats.slopet.toFixed(2) + fontSuffix;
+	$("cell" + simPrefix + "intercept").innerHTML = fontPrefix + stats.regIntercept.toFixed(digit) + fontSuffix;
+	$("cell" + simPrefix + "interceptse").innerHTML = fontPrefix + stats.interceptSE.toFixed(digit) + fontSuffix;
+	$("cell" + simPrefix + "interceptt").innerHTML = fontPrefix + stats.interceptt.toFixed(2) + fontSuffix;
+	$("cell" + simPrefix + "slopep").innerHTML = fontPrefix + stats.slopep.toFixed(4) + fontSuffix;
+	$("cell" + simPrefix + "interceptp").innerHTML = fontPrefix + stats.interceptp.toFixed(4) + fontSuffix;
+};
+}
+function getHistStatChoice() {
+var statChoice = "";
+	if ($("scrambleShowSlope").checked) statChoice  = "slope";
+	if ($("scrambleShowCorrelation").checked) statChoice = "correlation";
+	if ($("scrambleShowTRatio").checked) statChoice = "tRatio";
+	if ($("scrambleShowIntercept").checked) statChoice = "intercept";
+		return(statChoice);
+};
+
+
+// Clear dataText
+function clearData() {
+	var dataTextObj = $("dataText");
+	dataTextObj.value = "";
+};
+function rescaleGraphs(){
+	g_noaxischanges = false;
+	redraw();
+	}
+	
+function about() {
+	alert(g_about);
+};
+
+</script>
+
+<title>Two Quantitative Variables</title></head>
+<body onload="pageSetup()">
+<center><b><font color="#000099"><font size="+3"><p id="pageTitle"><a href="http://www.rossmanchance.com/applets/" style="text-decoration: none">Rossman/Chance Applet Collection</a></p></font></font></b></center>
+<b>
+<font size="+2">
+<p id="appletTitle"></p>
+</font>
+</b><hr>
+
+<table style="font-family: Helvetica,Arial,sans-serif;" border="0" cellpadding="5">
+	<tbody><tr>
+		<!-- row 1, column 1 -->
+		<td valign="top">
+			<table border="0">
+				<tbody><tr>
+					<td id="cellSampleData"> <span id="t_sampleData">:</span><br>
+					<button id="btnSwapInputOrder" onclick="swapInputOrder()" value="(explanatory, response)"></td>
+				</tr>
+				<tr>
+					<td id="cellSetPopulation"><strong><span id="t_popInputs">Population inputs </span></strong>
+					<br>
+					<table>
+					<tr><td><span id="t_popSlope">population slope: </span></td><td><input id="popSlope" size="3" type="text" value = "0" ></td></tr>
+					<tr><td><span id="t_popIntercept">population intercept: </span></td><td><input id="popIntercept" size="3" type="text" value = "3.24" onChange="changePopInputs()"></td></tr>
+					<tr><td><span id="t_popXMean">population <i>x</i> mean:</span></td><td> <input id="popXMean" size="3" type="text" value = "3.928" onChange="changePopInputs()"></td></tr>
+					<tr><td><span id="t_popXSD">population <i>x</i> std: </span></td><td><input id="popXStd" size="3" type="text" value = "1.84" onChange="changePopInputs()"></td></tr>
+					<tr><td><span id="t_popSigma">population sigma:</span></td><td> <input id="popSigma" size="3" type="text" value="0.45" onChange="changePopInputs()"></td></tr>
+					</table>
+					<button id = "t_createPop" onclick="createPopulation()" type="button">Create Population</button> 
+						</td>
+				</tr>
+				<tr>
+					<td> <textarea id="dataText" rows="10" cols="20"></textarea> </td>
+				</tr>
+				<tr>
+					<td> 
+						<button id="t_usedata" onclick="useData('notPop')" type="button">Use Data</button> 
+						<button id ="t_revert" onclick="revertData()" type="button">Revert</button>
+						<button id="t_clear" onclick="clearData()" type="button" >Clear</button>
+					</td>
+				</tr>
+				<tr>
+					<td id="cellNumObs">
+					</td>
+				</tr>
+			</tbody></table>
+		</td>
+		<!-- row 1, column 2 -->
+		<td valign="top"> 
+			<table><tr><td>
+				<canvas id="samplePlot" width="300" height="250"></canvas>
+				</tr></tr>
+				<tr><td id="cellRescale"><button onclick="rescaleGraphs()" type="button" >Rescale</button></td>
+				</tr>
+				</table>
+		</td>
+		<!-- row 1, column 3 -->
+		<td valign="top" style="border-left: 1px solid silver; padding: 5px;" >
+			<table border="0">
+				<tr>
+					<td id="cellShowScrambleOptions">
+						<span id="labelShowScrambleOptions">
+						:</span>
+						<input id="showScrambleOptions" onclick="changeShowScrambleOptions()" type="checkbox">
+					</td>
+				</tr>
+				<!-- if we use a form, then when enter is pressed on input textbox, the submit button will fire, which we want. -->
+				<!-- if we don't return false from onsubmit function, then form submission reloads the page, which we don't want! -->
+				<form onsubmit="return scrambleData();">
+					<tr> 
+						<td id="cellNumberOfScrambles">
+						<span id="labelNumberOfScrambles">Number of Shuffles:</span>
+						<input id="numberOfScrambles" size="3" type="text" value="1">
+						</td>
+						
+					</tr>
+					<tr>	
+						<td id="cellSampleSize">
+							<span id="labelSampleSize">Sample Size:</span> <input id="sampleSize" size = "3" type="text" value = "20" onchange="changeInputs()">
+						</td>
+					<tr>
+						<td id="cellScrambleData" valign="top">
+							<input id="randomizationMethod" type="submit" value=t_shuffleY />
+							<input id="scrambleShowTable" type="radio" name="scrambleShowData" value="showTable" onclick="redraw()"  /><span id="shuffleShowTableLabel"></span>
+							<input id="scrambleShowPlot" type="radio" name="scrambleShowData" value="showPlot" onclick="redraw()" checked /><span id="shuffleShowPlotLabel"></span>
+						</td>
+					</tr>
+				</form>
+				<tr>
+				<td id="shuffleTitle" valign="top">
+								</td>
+							</tr>
+							<tr>
+					<td id="cellScrambledDataText"> <textarea id="scrambledDataText" rows="10" cols="20"></textarea> </td>
+				</tr>
+				<td valign="top"> 
+					<canvas id="simSamplePlot" width="225" height="187"></canvas>
+				</td>
+				<tr><td id="cellOriginalLineBox"><input id="showOriginalLine" onclick="redraw()" type="checkbox"><span id ="showOrigLabel">Show Original Sample Line</span></td></tr>
+				<tr><td id="cellOriginalLine" valign="top"> </td></tr>
+			</table>
+		</td>
+		<!-- row 1, column 4 -->
+		<td valign="top">
+			<table border="0">
+				<tr>
+					<td id="cellScrambleShow">
+						<input id="scrambleShowCorrelation" type="radio" name="scrambleShow" value="correlation" onclick="changeScrambleShow()" /><span id="correlationText"></span>
+						<input id="scrambleShowSlope" type="radio" name="scrambleShow" value="slope" onclick="changeScrambleShow()"  /><span id="slopeText"></span>
+						<input id="scrambleShowTRatio" type="radio" name="scrambleShow" value="tRatio" onclick="changeScrambleShow()" /><span id="tstatisticText"></span>
+						<input id="scrambleShowIntercept" type = "radio" name="scrambleShow" value="intercept" onclick="changeScrambleShow()" ><span id="interceptText"></span>
+					</td>
+				</tr>
+				<tr>
+					<td id="cellScrambleHistogram" valign="top"> 
+						<canvas id="histogram" width="300" height="250"></canvas>
+					</td>
+				</tr>
+			</table>
+		</td>
+	</tr>
+	<tr>
+		<!-- row 2, column 1 -->
+		<td valign="top">
+			<table border="0">
+				<tbody><tr>
+					<td id="showMoveableLineBox"> 
+						<span id="showMovableLineLabel"></span>: <input id="showMovableLine" onclick="redraw()" type="checkbox">
+					</td>
+				</tr>
+				<tr>
+					<td id="movableLineEquation"> </td>
+				</tr>
+				<tr>
+					<td id="cellShowMovableResiduals"> 
+						<span id="showResidualsLabel"></span> <input id="showMovableResiduals" onclick="redraw()" type="checkbox"> 
+					</td>
+				</tr>
+				<tr>
+					<td id="movableSAE"></td>
+				</tr>
+				<tr>
+					<td id="cellShowMovableSquaredResiduals"> 
+					<span id="showSquaredResidualsLabel"></span> <input id="showMovableSquaredResiduals" onclick="redraw()" type="checkbox"> 
+					</td>
+				</tr>
+				<tr>
+					<td id="movableSSE"> </td>
+				</tr>
+			</tbody></table>
+		</td>
+		<!-- row 2, column 2 -->
+		<td valign="top">
+			<table border="0">
+				<tr>
+					<td> <span id="showRegressionLineLabel"></span>
+						 <input id="showRegressionLine" onclick="redraw()" type="checkbox"> 
+					</td>
+				</tr>
+				<tr>
+					<td id="regressionLineEquation"> </td>
+				</tr>
+				<tr>
+					<td id="cellShowRegressionResiduals">
+						<span id="showResidualsLabel2"></span><input id="showRegressionResiduals" onclick="redraw()" type="checkbox"> 
+					</td>
+				</tr>
+				<tr>
+					<td id="regressionSAE"></td>
+				</tr>
+				<tr>
+					<td id="cellShowRegressionSquaredResiduals">
+						<span id="showSquaredResidualsLabel2"></span><input id="showRegressionSquaredResiduals" onclick="redraw()" type="checkbox"> 
+					</td>
+				</tr>
+				<tr>
+					<td id="regressionSSE"> </td>
+				</tr>
+			</table>
+		</td>
+		<!-- row 2, column 3 -->
+		<td valign="top" style="border-left: 1px solid silver; padding: 5px;" >
+			<table boder="1">
+				<tr>
+					<td id="simRegressionLineEquation" valign="top"> </td>
+				</tr>
+			</table>
+		</td>
+		<!-- row 2, column 4 -->
+		<td valign="top">
+			<table border="0">
+				<tr>
+					<td id="cellScrambleCountSamples" title="Choose the direction(s) you want to count samples">
+						<!-- if we use a form, then when enter is pressed on input textbox, the submit button will fire, which we want. -->
+						<!-- if we don't return false from onsubmit function, then form submission reloads the page, which we don't want! -->
+						<form onsubmit="return doCountSamples();">
+							<span id="cellShuffleCountSamplesLabel">Count Samples</span>						
+							<select id="countOperator" onChange="redraw()">
+								<option id="greaterThan" value="GREATER THAN">Greater Than &ge;</option>
+								<option id="lessThan" value="LESS THAN">Less Than &le;</option>
+								<option id="beyond" value="BEYOND">Beyond</option>
+							</select>
+							<input id="countInput" size="3" type="text" onChange="redraw()">
+							<input type="submit" id="t_countButton" value="Count"/>
+						</form>
+					</td>
+				</tr>
+				<tr>
+					<td id="countSamplesOutput"> </td>
+				</tr>
+				<tr>
+					<td id="countSamplesNotes"> </td>
+				</tr>
+				<tr>
+					<td id="cellOverlayTDistribution">
+						<span id="t_overlayt">Overlay <i>t</i> Distribution:</span><input id="overlayTDistribution" onclick="redraw()" type="checkbox">
+					</td>
+				</tr>
+				<tr>
+					<td valign="top" id="cellTheoPvalueOutput">  </td>
+				</tr>
+				</tr>
+			</table>
+		</td>
+	</tr>
+	<tr>
+		<!-- row 3, column 1 -->
+		<td valign="top">
+			<table id="addremovecell" border="0">
+				<tr>
+					<td  ><span id="addObservationLabel"></span></td>
+				</tr>
+				<tr>
+					<td>
+						x: <input id="addX" size="3" type="text">
+						y: <input id="addY" size="3" type="text"> 
+						<button id="btnAddObservation" onclick="addObservation()" type="button">Add</button>
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<input id="btnDeleteObservation" onclick="deleteObservation()" type="button" value="Delete" />
+					</td>
+				</tr>
+				<tr>
+					<td id="observationResidual"></td>
+				</tr>
+			</table>
+		</td>
+		<!-- row 3, column 2 -->
+		<td valign="top">
+			<table border="0">
+				<tr>
+					<td> <span id="showCorrelationLabel"></span>
+						<input id="showCorrelation" onclick="redraw()" type="checkbox">
+					</td>
+					<td id="cellCorrelation"> </td>
+				</tr>
+				<tr>
+					<td><span id="rsquaredLabel"></span>
+						 <input id="showRSquared" onclick="redraw()" type="checkbox"> 
+					</td>
+					<td id="cellRSquared"></td>
+				</tr>
+				<tr>
+					<td><span id="regSLabel"></span>
+						<input id="showS" onclick="redraw()" type="checkbox">
+					</td>
+					<td id="cellS"></td>
+				</tr>
+			</tbody></table>
+		</td>
+		<!-- row 3, column 3 -->
+		<td valign="top" style="border-left: 1px solid silver; padding: 5px;" >
+			<table border="0">
+				<tr>
+					<td id="cellSimCorrelation" valign="top"> </td>
+				</tr>
+				<tr>
+					<td id="cellSimRSquared"></td>
+				</tr>
+				<tr>
+					<td id="cellSimS"></td>
+				</tr>
+			</table>
+		</td>
+		<!-- row 3, column 4 -->
+		<td>
+		</td>
+	</tr>
+	<tr>
+		<!-- row 4, column 1 -->
+		<td valign="top">
+			<table border="0">
+				<tr>
+					<td id="moveobservationcell" > 
+						<span id="moveObservationsLabel"></span><input id="moveObservations" onclick="redraw()" type="checkbox">
+					</td>
+				</tr>
+				<tr>
+					<td> Show descriptive: <input id="showDescriptive" onclick="redraw()" type="checkbox" ></td>
+					</tr><tr>		<td id = "descriptiveOutput"> </td>
+					</tr>
+				<tr>
+					<td> <span id="designPopulationLabel"></span>
+						 <input id="setPopulation" onclick="setPopulation()" type="checkbox" >
+					</td>
+				</tr>
+				<tr id="resamplePopulationCell">
+					<td  >
+					<select id="resamplePopulation" onChange="redraw()">
+								<option value="Bivariate">Bivariate</option>
+								<option value="Uniformx">Uniform x</option>
+								<option value="Observedx">Observed x</option>
+							</select>
+					</td>
+				</tr>
+			</table>
+		</td>
+		<!-- row 4, column 2 -->
+		<td>
+			<table border="0">
+				<tr>
+					<td><span id="regressionTableLabel"></span>
+						<input id="showRegressionOutput" onclick="redraw()" type="checkbox">
+					</td>
+				</tr>
+				<tr>
+					<td id="cellRegressionOutput">
+						<table border="0" cellpadding="5">
+							<tr> 
+								<td>Term</td><td>Coeff</td><td id="SETable"></span></td><td>t-stat</td><td>p-value</td>
+							</tr>
+							<tr> 
+								<td><span id="interceptTextTable"></span></td>
+								<td id="cellintercept"></td>
+								<td id="cellinterceptse"></td>
+								<td id="cellinterceptt"></td>
+								<td id="cellinterceptp"></td>
+							</tr>
+							<tr> 
+								<td id="cellregressionOutputSlope"><span id="slopeTextTable"></span></td>
+								<td id="cellslope"></td>
+								<td id="cellslopese"></td>
+								<td id="cellslopet"></td>
+								<td id="cellslopep"></td>
+							</tr>
+						</table>
+					</td>
+				</tr>
+				<tr>
+					<td id="cellSlopeCI"><span id="SlopeCILabel"></span>
+					<input id="showRegSlopeCI" onclick="redraw()" type="checkbox">
+					</td>
+				<tr>	
+					<td id="regSlopeCIOutput"> &nbsp;
+					</td>
+				</tr>
+				</tr>
+			</table>
+		</td>
+		<!-- row 4, column 3 -->
+		<td valign="top" style="border-left: 1px solid silver; padding: 5px;" >
+			<table border="0">
+				<tr>
+					<td id="cellSimRegressionOutput">
+						<table border="0" cellpadding="5">
+							<tr>
+								<td colspan=5><font color="blue">Most Recent Regression Table</font></td>
+							<tr> 
+								<td><font color="blue">Term</font></td>
+								<td><font color="blue">Coeff</font></td>
+								<td><font color="blue">SE</font></td>
+								<td><font color="blue">t-stat</font></td>
+								<td><font color="blue">p-value</font></td>
+							</tr>
+							<tr> 
+								<td><font color="blue">Intercept</font></td>
+								<td id="cellSimintercept"></td>
+								<td id="cellSiminterceptse"></td>
+								<td id="cellSiminterceptt"></td>
+								<td id="cellSiminterceptp"></td>
+							</tr>
+							<tr> 
+								<td id="cellSimregressionOutputSlope">Slope</td>
+								<td id="cellSimslope"></td>
+								<td id="cellSimslopese"></td>
+								<td id="cellSimslopet"></td>
+								<td id="cellSimslopep"></td>
+							</tr>
+						</table>
+					</td>
+				</tr>
+			</table>
+		</td>
+		<!-- row 4, column 3 -->
+		<td>
+		</td>
+	</tr>
+</tbody></table>
+
+<br>
+
+<button id = "about" onclick="about()" type="button">About</button>
+<p style="font-family: Helvetica,Arial,sans-serif;" id="PageLastModified"></p>
+<p><span style="font-weight: bold;">Notes</span>:&nbsp;</p>
+<ul><li style="font-family: Helvetica,Arial,sans-serif;">This applet should work in IE but may be slow.</li>
+<li style="font-family: Helvetica,Arial,sans-serif;">Use the green squares on the movable line to change slope, intercept.&nbsp;</li><li><span style="font-family: Helvetica,Arial,sans-serif;">
+Right now pasted data must have variable names (use single words, no symbols)</span></li>
+<LI style="font-family: Helvetica,Arial,sans-serif;"> Dotplot coloring may not exactly match count, as coloring is based on bin mid-points</li>
+<li style="font-family: Helvetica,Arial,sans-serif;"> For the Spanish version, click <a href="http://www.rossmanchance.com/applets/RegShuffle.htm?language=1"> here</a></li></ul>
+<p id="MovingChartXY"></p>
+<p id="Notes"></p>
+<p id="Notes2"></p>
+<p id="Notes3"></p>
+<p id="Notes4"></p>
+<p id="Notes5"></p>
+<p id="Notes6"></p>
+<p id="Notes7"></p>
+</body></html>
+
